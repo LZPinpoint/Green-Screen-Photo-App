@@ -1,0 +1,22 @@
+/* imagine theme — derived from theimagineteam.com: red header, white type, near-black, rounded, lowercase */
+@font-face { font-family: 'Axiforma'; src: local('Axiforma'), local('Poppins'); }
+:root {
+  --im-red: #B80021;
+  --im-red-deep: #8f001a;
+  --im-red-glow: #e0153b;
+  --im-ink: #181818;
+  --im-black: #000;
+  --im-white: #fff;
+  --im-fog: #e3e3e3;
+  --im-grey: #999;
+  --im-radius: 28px;
+  --im-radius-sm: 14px;
+  --im-font: 'Axiforma', 'Poppins', 'Helvetica Neue', Arial, sans-serif;
+}
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--im-ink); color: var(--im-white); font-family: var(--im-font); text-transform: lowercase; -webkit-user-select: none; user-select: none; overflow: hidden; }
+.im-btn { background: var(--im-red); color: #fff; border: 0; border-radius: 999px; padding: 22px 48px; font: 700 28px var(--im-font); text-transform: lowercase; cursor: pointer; transition: transform .12s, background .12s; min-height: 72px; }
+.im-btn:active { transform: scale(.96); background: var(--im-red-deep); }
+.im-btn.ghost { background: transparent; border: 2px solid #fff; }
+.im-card { background: #000; border-radius: var(--im-radius); overflow: hidden; }
+.im-dot { color: var(--im-red); } /* the red dot in the wordmark — use sparingly */
