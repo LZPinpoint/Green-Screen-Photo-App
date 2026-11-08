@@ -107,3 +107,15 @@ describe('library frames/layouts + test sessions', () => {
     expect(a.id).not.toBe(t.id)
   })
 })
+
+describe('staff ticket + label persistence', () => {
+  it('session.patch keeps ticket and label (trimmed) across reloads', async () => {
+    const dir = await tmp()
+    const s1 = new SessionStore(dir)
+    const s = await s1.start()
+    await s1.patch(s.id, { ticket: 12, label: 'smith family '.repeat(20) })
+    const again = (await new SessionStore(dir).get(s.id))!
+    expect(again.ticket).toBe(12)
+    expect(again.label!.length).toBe(80)
+  })
+})

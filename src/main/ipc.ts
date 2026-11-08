@@ -23,7 +23,7 @@ export function buildHandlers(sv: Services): Record<string, Handler> {
     },
     [CH.sessionGet]: (id: string) => sv.sessions.get(id),
     [CH.sessionList]: (limit?: number) => sv.sessions.list(limit),
-    [CH.sessionUpdate]: (id: string, p: { sceneId?: string; frameId?: string; emailed?: string; test?: boolean }) => sv.sessions.patch(id, p ?? {}),
+    [CH.sessionUpdate]: (id: string, p: { sceneId?: string; frameId?: string; emailed?: string; test?: boolean; ticket?: number; label?: string }) => sv.sessions.patch(id, p ?? {}),
     [CH.sessionSaveKeyed]: (id: string, index: number, d: ImageData64) => sv.sessions.saveKeyed(id, index, d),
     [CH.libraryScenes]: () => sv.library.scenes(),
     [CH.librarySaveScene]: (s: BackgroundScene, img?: ImageData64) => sv.library.saveScene(s, img),

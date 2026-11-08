@@ -48,12 +48,14 @@ export class SessionStore {
     })
   }
 
-  patch(id: string, p: Partial<Pick<Session, 'sceneId' | 'frameId' | 'emailed' | 'test'>>): Promise<Session> {
+  patch(id: string, p: Partial<Pick<Session, 'sceneId' | 'frameId' | 'emailed' | 'test' | 'ticket' | 'label'>>): Promise<Session> {
     return this.update(id, s => {
       if (p.sceneId !== undefined) s.sceneId = p.sceneId
       if (p.frameId !== undefined) s.frameId = p.frameId
       if (p.emailed !== undefined) s.emailed = p.emailed
       if (p.test !== undefined) s.test = p.test
+      if (p.ticket !== undefined) s.ticket = p.ticket
+      if (p.label !== undefined) s.label = String(p.label).slice(0, 80)
     })
   }
 

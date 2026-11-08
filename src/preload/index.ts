@@ -7,7 +7,7 @@ export interface PrintJobEvent { jobId: string; sessionId: string; status: 'queu
 /** BoothAPI plus a few optional extras the integrator may wire into the UI. */
 export interface BoothAPIExt extends BoothAPI {
   session: BoothAPI['session'] & {
-    update(id: string, patch: { sceneId?: string; frameId?: string; emailed?: string; test?: boolean }): Promise<Session>
+    update(id: string, patch: { sceneId?: string; frameId?: string; emailed?: string; test?: boolean; ticket?: number; label?: string }): Promise<Session>
     saveKeyed(id: string, index: number, dataUrl: ImageData64): Promise<Session>
   }
   printer: BoothAPI['printer'] & { onStatus(cb: (e: PrintJobEvent) => void): () => void }
