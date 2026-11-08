@@ -37,9 +37,9 @@ mac:
   files:
     - '!node_modules/onnxruntime-node/bin/napi-v6/win32/**'
     - '!node_modules/onnxruntime-node/bin/napi-v6/linux/**'
+  # arch comes from the CLI flag (--arm64 / --x64) so each CI job packages matching native binaries (sharp, onnxruntime)
   target:
     - target: dmg
-      arch: [x64, arm64]
   category: public.app-category.photography
   extendInfo:
     NSCameraUsageDescription: imagine booth uses the camera to take guest photos.

@@ -42,7 +42,18 @@ jobs:
       - run: npm ci
       - run: npx electron-vite build
       # unsigned builds: no certificates needed. Windows shows 'unknown publisher', macOS needs right-click > open the first time.
-      - run: npx electron-builder ${{ matrix.args }} --publish never
+      # macOS runners can fail 'hdiutil detach ... resource busy' while building the .dmg (background scanner holds the volume).
+      - name: free macOS disk-image tooling
+        if: runner.os == 'macOS'
+        run: sudo pkill -9 XProtect >/dev/null 2>&1 || true
+      - name: package (retries flaky runner steps up to 3 times)
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            npx electron-builder ${{ matrix.args }} --publish never && exit 0
+            echo "attempt $i failed; retrying in 15s"; sleep 15
+          done
+          exit 1
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
