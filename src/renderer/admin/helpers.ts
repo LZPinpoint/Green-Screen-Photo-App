@@ -96,6 +96,16 @@ export function validateSettingsImport(raw: unknown): ImportResult {
       out.key = key
     }
   }
+  if (r.mode !== undefined) {
+    if (r.mode === 'staff' || r.mode === 'kiosk') out.mode = r.mode
+    else errors.push('mode must be staff or kiosk')
+  }
+  if (r.staff !== undefined) {
+    const v = validateStaffDraft({ ...staffToDraft(DEFAULT_SETTINGS), ...(typeof r.staff === 'object' && r.staff ? r.staff : {}), mode: 'staff' } as StaffDraft)
+    if (typeof r.staff !== 'object' || r.staff === null || Array.isArray(r.staff)) errors.push('staff must be an object')
+    else if (!v.ok) errors.push(...Object.values(v.errors).map(e => 'staff: ' + e))
+    else out.staff = { ...v.staff!, ...(typeof r.staff.defaultSceneId === 'string' ? { defaultSceneId: r.staff.defaultSceneId } : {}) }
+  }
   if (r.share !== undefined) {
     const sh = r.share
     if (typeof sh !== 'object' || sh === null || Array.isArray(sh)) errors.push('share must be an object')
@@ -293,3 +303,47 @@ export function mergeImportedShare(cur: ShareSettings | undefined, imp: ShareSet
 }
 /** Sessions staff should see: hardware-test sessions are hidden. */
 export const realSessions = (l: Session[]): Session[] => l.filter(s => !s.test)
+
+
+// ─── operating mode (staff console vs self-serve kiosk) ───
+export const COPIES_RANGE: [number, number] = [1, 10]
+export const COUNTDOWN_RANGE: [number, number] = [0, 10]
+/** keys the console already uses: they can't also be the shutter */
+const RESERVED_KEYS = new Set(['Escape', 'Tab', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'ArrowLeft', 'ArrowRight', '[', ']', '?', 'p', 'P', 'r', 'R', 'f', 'F', ...'123456789'.split('')])
+export const isReservedCaptureKey = (k: string) => RESERVED_KEYS.has(k)
+/** a key as people say it: ' ' -> space, 'PageDown' -> page down */
+export function captureKeyLabel(k: string): string {
+  if (k === ' ') return 'space'
+  const map: Record<string, string> = { Enter: 'enter', PageDown: 'page down', PageUp: 'page up', ArrowUp: 'up arrow', ArrowDown: 'down arrow', Backspace: 'backspace' }
+  return map[k] ?? k.toLowerCase()
+}
+export const normalizeTicketPrefix = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase()
+
+export interface StaffDraft {
+  mode: 'staff' | 'kiosk'
+  autoPrint: boolean
+  copies: number | ''
+  ticketPrefix: string
+  captureKey: string
+  countdownSec: number | ''
+}
+export function staffToDraft(s: Pick<VenueSettings, 'mode' | 'staff'>): StaffDraft {
+  const d = DEFAULT_SETTINGS.staff!, st = s.staff ?? d
+  return {
+    mode: s.mode === 'kiosk' ? 'kiosk' : 'staff', autoPrint: st.autoPrint ?? d.autoPrint, copies: st.copies ?? d.copies,
+    ticketPrefix: st.ticketPrefix ?? d.ticketPrefix, captureKey: st.captureKey || d.captureKey, countdownSec: st.countdownSec ?? d.countdownSec
+  }
+}
+export interface StaffValidation { ok: boolean; errors: Partial<Record<'copies' | 'ticketPrefix' | 'captureKey' | 'countdownSec', string>>; mode: 'staff' | 'kiosk'; staff?: NonNullable<VenueSettings['staff']> }
+export function validateStaffDraft(d: StaffDraft): StaffValidation {
+  const errors: StaffValidation['errors'] = {}
+  const whole = (v: unknown, [lo, hi]: [number, number]) => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi
+  if (!whole(d.copies, COPIES_RANGE)) errors.copies = `copies must be a whole number from ${COPIES_RANGE[0]} to ${COPIES_RANGE[1]}`
+  if (!whole(d.countdownSec, COUNTDOWN_RANGE)) errors.countdownSec = `countdown must be ${COUNTDOWN_RANGE[0]} (instant) to ${COUNTDOWN_RANGE[1]} seconds`
+  if (!/^[A-Za-z0-9]{1,3}$/.test(d.ticketPrefix)) errors.ticketPrefix = 'ticket prefix is 1 to 3 letters or numbers, like A'
+  if (!d.captureKey) errors.captureKey = 'press the key you want to use'
+  else if (isReservedCaptureKey(d.captureKey)) errors.captureKey = `${captureKeyLabel(d.captureKey)} is already used for something else in staff mode — pick another key`
+  const mode = d.mode === 'kiosk' ? 'kiosk' : 'staff'
+  if (Object.keys(errors).length) return { ok: false, errors, mode }
+  return { ok: true, errors, mode, staff: { autoPrint: !!d.autoPrint, copies: d.copies as number, ticketPrefix: d.ticketPrefix.toUpperCase(), captureKey: d.captureKey, countdownSec: d.countdownSec as number } }
+}

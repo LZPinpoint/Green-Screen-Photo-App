@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { DEFAULT_SETTINGS } from '../../src/shared/types'
-import { shapeByDay, topScenes, niceMax, validateSettingsImport, buildReportMarkdown, buildReportJson, checklistProgress, CHECKLIST, tipsFromStats, analyzeFrame, sessionsToday, dayKey } from '../../src/renderer/admin/helpers'
+import { shapeByDay, topScenes, niceMax, validateSettingsImport, buildReportMarkdown, buildReportJson, checklistProgress, CHECKLIST, tipsFromStats, analyzeFrame, sessionsToday, dayKey, staffToDraft, validateStaffDraft, normalizeTicketPrefix, captureKeyLabel, isReservedCaptureKey } from '../../src/renderer/admin/helpers'
 
 describe('stats shaping', () => {
   it('zero-fills last n days oldest first', () => {
@@ -126,5 +126,47 @@ describe('sharing helpers', () => {
   })
   it('hides test sessions', () => {
     expect(realSessions([{ id: 'a', test: true } as any, { id: 'b' } as any]).map(s => s.id)).toEqual(['b'])
+  })
+})
+
+describe('operating mode / staff options', () => {
+  it('defaults round-trip and validate', () => {
+    const d = staffToDraft(DEFAULT_SETTINGS)
+    expect(d).toMatchObject({ mode: 'staff', autoPrint: false, copies: 1, ticketPrefix: 'A', captureKey: ' ', countdownSec: 3 })
+    const v = validateStaffDraft(d)
+    expect(v.ok).toBe(true); expect(v.staff).toEqual({ autoPrint: false, copies: 1, ticketPrefix: 'A', captureKey: ' ', countdownSec: 3 })
+  })
+  it('old settings without staff fall back to defaults', () => {
+    expect(staffToDraft({} as never).mode).toBe('staff')
+    expect(staffToDraft({ mode: 'kiosk' } as never)).toMatchObject({ mode: 'kiosk', copies: 1 })
+  })
+  it('rejects bad numbers, prefix and keys', () => {
+    const base = staffToDraft(DEFAULT_SETTINGS)
+    expect(validateStaffDraft({ ...base, copies: 0 }).errors.copies).toBeTruthy()
+    expect(validateStaffDraft({ ...base, copies: 11 }).ok).toBe(false)
+    expect(validateStaffDraft({ ...base, copies: '' }).ok).toBe(false)
+    expect(validateStaffDraft({ ...base, copies: 1.5 }).ok).toBe(false)
+    expect(validateStaffDraft({ ...base, countdownSec: -1 }).errors.countdownSec).toBeTruthy()
+    expect(validateStaffDraft({ ...base, countdownSec: 0 }).ok).toBe(true)
+    expect(validateStaffDraft({ ...base, ticketPrefix: '' }).errors.ticketPrefix).toBeTruthy()
+    expect(validateStaffDraft({ ...base, ticketPrefix: 'ABCD' }).errors.ticketPrefix).toBeTruthy()
+    expect(validateStaffDraft({ ...base, captureKey: '' }).errors.captureKey).toBeTruthy()
+    expect(validateStaffDraft({ ...base, captureKey: 'p' }).errors.captureKey).toMatch(/already used/)
+    expect(validateStaffDraft({ ...base, captureKey: 'PageDown' }).ok).toBe(true)
+  })
+  it('uppercases the prefix and keeps the mode', () => {
+    expect(normalizeTicketPrefix('a-b!c9')).toBe('ABC')
+    const v = validateStaffDraft({ ...staffToDraft(DEFAULT_SETTINGS), mode: 'kiosk', ticketPrefix: 'k' })
+    expect(v.mode).toBe('kiosk'); expect(v.staff?.ticketPrefix).toBe('K')
+  })
+  it('names keys for people', () => {
+    expect(captureKeyLabel(' ')).toBe('space'); expect(captureKeyLabel('Enter')).toBe('enter'); expect(captureKeyLabel('B')).toBe('b')
+    expect(isReservedCaptureKey('Escape')).toBe(true); expect(isReservedCaptureKey('5')).toBe(true); expect(isReservedCaptureKey('b')).toBe(false)
+  })
+  it('settings import understands mode + staff', () => {
+    const r = validateSettingsImport({ mode: 'kiosk', staff: { autoPrint: true, copies: 2, ticketPrefix: 'z', captureKey: 'Enter', countdownSec: 0 } })
+    expect(r.ok).toBe(true); expect(r.settings?.mode).toBe('kiosk'); expect(r.settings?.staff).toMatchObject({ autoPrint: true, copies: 2, ticketPrefix: 'Z', captureKey: 'Enter', countdownSec: 0 })
+    expect(validateSettingsImport({ mode: 'party' }).ok).toBe(false)
+    expect(validateSettingsImport({ staff: { copies: 99 } }).ok).toBe(false)
   })
 })

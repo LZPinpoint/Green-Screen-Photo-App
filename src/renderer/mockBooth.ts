@@ -13,11 +13,17 @@ const MAX_DEMO_PHOTOS = 4
 /** shrink + store the final composite so the demo gallery page can show it (localStorage is small: keep a few, ~700px) */
 async function storeDemoPhoto(shareId: string, dataUrl: ImageData64): Promise<void> {
   try {
-    const img = new Image(); img.src = dataUrl; await img.decode()
-    const k = Math.min(1, 800 / img.naturalWidth)
-    const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k)
-    c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
-    const small = c.toDataURL('image/jpeg', 0.82)
+    let small: string
+    try { // off the main thread (the staff image worker): staff mode saves a sheet every few seconds
+      const { getEngine } = await import('./staff/engineClient')
+      small = await (await getEngine()).call<string>('thumb', { url: dataUrl, max: 800 })
+    } catch {
+      const img = new Image(); img.src = dataUrl; await img.decode()
+      const k = Math.min(1, 800 / img.naturalWidth)
+      const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k)
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+      small = c.toDataURL('image/jpeg', 0.82)
+    }
     let idx: string[] = []
     try { idx = JSON.parse(localStorage.getItem(DEMO_PHOTO_INDEX) || '[]') } catch { idx = [] }
     idx = [...idx.filter(i => i !== shareId), shareId]
@@ -138,13 +144,18 @@ function showVirtualPrint(dataUrl: string, label: string) {
 export function createMockBooth(): BoothAPI {
   const sessions = new Map<string, Session>()
   const composites = new Map<string, ImageData64>()
+  // everything saved through the API stays resolvable by library.imageUrl('mem:...') so staff mode can reload today's items
+  const files = new Map<string, ImageData64>()
+  let fileSeq = 0
   const shareIds = new Map<string, string>()
   const frames: FrameOverlay[] = FRAMES.map(f => ({ ...f }))
   const layouts: PrintLayout[] = LAYOUTS.map(l => ({ ...l }))
   const newShareId = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4)
   const stats = { sessions: 0, prints: 0, byScene: {} as Record<string, number>, byDay: {} as Record<string, number> }
   let settings: VenueSettings = { ...DEFAULT_SETTINGS, venueName: 'the imagine museum', idleTimeoutSec: 45 }
+  const withStaff = (st?: Partial<VenueSettings['staff']>) => ({ ...DEFAULT_SETTINGS.staff!, ...(st ?? {}) })
   try { const raw = localStorage.getItem(LS_KEY); if (raw) settings = { ...settings, ...JSON.parse(raw) } } catch { /* storage blocked */ }
+  settings = { ...settings, mode: settings.mode ?? 'staff', staff: withStaff(settings.staff) }
   const persist = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(settings)) } catch { /* ignore */ } }
   const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
   const today = () => new Date().toISOString().slice(0, 10)
@@ -172,16 +183,22 @@ export function createMockBooth(): BoothAPI {
         sessions.set(s.id, s); stats.sessions++; stats.byDay[today()] = (stats.byDay[today()] ?? 0) + 1
         return s
       },
-      async saveShot(id, dataUrl) { const s = sessions.get(id)!; s.shots.push({ raw: dataUrl.slice(0, 32) + '…' }); return s },
+      async saveShot(id, dataUrl) { const s = sessions.get(id)!; const path = `mem:shot:${id}:${s.shots.length}`; files.set(path, dataUrl); s.shots.push({ raw: path }); return s },
+      // extra (same shape as the Electron main's session:update): scene/frame/ticket/label/test, merged into the session
+      async update(id: string, patch: Partial<Session>) {
+        const s = sessions.get(id); if (!s) throw new Error('no such session')
+        for (const k of ['sceneId', 'frameId', 'emailed', 'test', 'ticket', 'label'] as const) if (patch[k] !== undefined) (s as unknown as Record<string, unknown>)[k] = patch[k]
+        return s
+      },
       async saveComposite(id, dataUrl) {
-        const s = sessions.get(id)!; composites.set(id, dataUrl); s.composite = 'memory'
+        const s = sessions.get(id)!; composites.set(id, dataUrl); s.composite = `mem:comp:${id}:${++fileSeq}`; files.set(s.composite, dataUrl)
         const shareId = shareIds.get(id)
-        if (shareId) void storeDemoPhoto(shareId, dataUrl) // background, never blocks
+        if (shareId) setTimeout(() => void storeDemoPhoto(shareId, dataUrl), 1500) // background, deferred so it never lands on a capture
         return s
       },
       get: async id => sessions.get(id),
       list: async (limit = 50) => [...sessions.values()].slice(-limit).reverse()
-    },
+    } as BoothAPI['session'],
     library: {
       scenes: async () => SCENE_LIST(),
       saveScene: async () => {},
@@ -190,11 +207,14 @@ export function createMockBooth(): BoothAPI {
       saveFrame: async f => { const i = frames.findIndex(x => x.id === f.id); if (i >= 0) frames[i] = { ...f }; else frames.push({ ...f }) },
       layouts: async () => layouts.map(l => ({ ...l, footerText: settings.venueName })),
       saveLayout: async l => { const i = layouts.findIndex(x => x.id === l.id); if (i >= 0) layouts[i] = { ...l }; else layouts.push({ ...l }) },
-      imageUrl: async file => sceneImages()[file] ?? ''
+      imageUrl: async file => files.get(file) ?? sceneImages()[file] ?? ''
     },
     settings: {
       get: async () => settings,
-      set: async patch => { settings = { ...settings, ...patch }; persist(); return settings }
+      set: async patch => {
+        settings = { ...settings, ...patch, ...(patch.staff ? { staff: withStaff({ ...settings.staff, ...patch.staff }) } : {}) }
+        persist(); return settings
+      }
     },
     stats: { summary: async () => ({ ...stats }) },
     ai: { cutout: async d => d },

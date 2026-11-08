@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import { Chip, Field, Slider, useLoad, useToast } from '../ui'
-import { exportSettingsJson, mergeImportedShare, validateSettingsImport } from '../helpers'
+import { captureKeyLabel, exportSettingsJson, mergeImportedShare, normalizeTicketPrefix, staffToDraft, validateSettingsImport, validateStaffDraft, type StaffDraft } from '../helpers'
 import { download } from '../imgutil'
 import type { VenueSettings } from '../../../shared/types'
+
+/** like Field, but a div (it holds buttons) and with an inline error */
+function SField({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  return <div className="ad-field" role="group" aria-label={label}>{label}{children}{error && <span className="ad-bad" role="alert">{error}</span>}</div>
+}
 
 const SWATCHES = ['#B80021', '#e0153b', '#d35400', '#0a7d5a', '#1f5fbf', '#6a3fb5']
 const HEX = /^#[0-9a-fA-F]{6}$/
@@ -13,9 +18,30 @@ export default function Settings() {
   const [toast, toastNode] = useToast()
   const [pin, setPin] = useState({ cur: '', next: '', again: '' })
   const [pinMsg, setPinMsg] = useState<{ ok: boolean; t: string }>()
+  const [sd, setSd] = useState<StaffDraft>()
+  const [picking, setPicking] = useState(false)
   const [imp, setImp] = useState<{ errors: string[]; settings?: Partial<VenueSettings>; name: string }>()
-  useEffect(() => { if (st.data) setD(structuredClone(st.data)) }, [st.data])
-  if (!d || !st.data) return <p className="ad-muted">loading…</p>
+  useEffect(() => { if (st.data) { setD(structuredClone(st.data)); setSd(staffToDraft(st.data)) } }, [st.data])
+  // 'press a key' picker: the next key press becomes the shutter key
+  useEffect(() => {
+    if (!picking) return
+    const on = (e: KeyboardEvent) => {
+      e.preventDefault(); e.stopPropagation()
+      if (e.key === 'Escape') { setPicking(false); return }
+      if (['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return
+      setSd(cur => cur && { ...cur, captureKey: e.key }); setPicking(false)
+    }
+    window.addEventListener('keydown', on, true)
+    return () => window.removeEventListener('keydown', on, true)
+  }, [picking])
+  if (!d || !st.data || !sd) return <p className="ad-muted">loading…</p>
+  const staffV = validateStaffDraft(sd)
+  const staffDirty = JSON.stringify(sd) !== JSON.stringify(staffToDraft(st.data))
+  const saveStaff = async () => {
+    if (!staffV.ok || !staffV.staff) { toast('fix the highlighted staff options first'); return }
+    // defaultSceneId belongs to the console (it saves it when staff pick a scene): keep it
+    await window.booth.settings.set({ mode: staffV.mode, staff: { ...staffV.staff, defaultSceneId: st.data!.staff?.defaultSceneId } }); st.reload(); toast('operating mode saved')
+  }
   const dirty = JSON.stringify(d) !== JSON.stringify(st.data)
   const up = (p: Partial<VenueSettings>) => setD({ ...d, ...p })
   const save = async () => {
@@ -62,6 +88,42 @@ export default function Settings() {
       </div>
 
       <div className="ad-grid">
+        <div className="ad-card" aria-labelledby="opmode-h">
+          <div className="ad-row sp"><h3 id="opmode-h" style={{ margin: 0 }}>operating mode</h3>{staffDirty && <Chip tone="warn">unsaved</Chip>}</div>
+          <p className="ad-muted">how this booth is run. takes effect when the screen next reloads (or after you leave admin).</p>
+          <div className="ad-row" role="radiogroup" aria-label="operating mode" style={{ marginTop: 10 }}>
+            {([['staff', 'staff mode', 'an attendant captures each group'], ['kiosk', 'self-serve booth', 'guests do it themselves']] as const).map(([m, t, sub]) => (
+              <button key={m} role="radio" aria-checked={sd.mode === m} className={`ad-btn${sd.mode === m ? '' : ' ghost'}`} onClick={() => setSd({ ...sd, mode: m })} style={{ textAlign: 'left' }}>
+                <span style={{ display: 'block' }}>{t}</span><small style={{ display: 'block', fontWeight: 400 }}>{sub}</small>
+              </button>
+            ))}
+          </div>
+          <h4>staff options</h4>
+          <div className="ad-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <SField label="print automatically after each capture">
+              <label className="ad-row" style={{ minHeight: 44 }}><input type="checkbox" checked={sd.autoPrint} onChange={e => setSd({ ...sd, autoPrint: e.target.checked })} style={{ width: 24, height: 24 }} /> {sd.autoPrint ? 'on — fast line mode' : 'off — staff press print'}</label>
+            </SField>
+            <SField label="default copies (1–10)" error={staffV.errors.copies}>
+              <input type="number" min={1} max={10} value={sd.copies} onChange={e => setSd({ ...sd, copies: e.target.value === '' ? '' : Number(e.target.value) })} aria-invalid={!!staffV.errors.copies} />
+            </SField>
+            <SField label="ticket prefix (e.g. A → A001)" error={staffV.errors.ticketPrefix}>
+              <input type="text" value={sd.ticketPrefix} maxLength={3} onChange={e => setSd({ ...sd, ticketPrefix: normalizeTicketPrefix(e.target.value) })} aria-invalid={!!staffV.errors.ticketPrefix} />
+            </SField>
+            <SField label="countdown before the shot (0 = instant)" error={staffV.errors.countdownSec}>
+              <input type="number" min={0} max={10} value={sd.countdownSec} onChange={e => setSd({ ...sd, countdownSec: e.target.value === '' ? '' : Number(e.target.value) })} aria-invalid={!!staffV.errors.countdownSec} />
+            </SField>
+            <SField label="capture key (works with presenter clickers)" error={staffV.errors.captureKey}>
+              <div className="ad-row">
+                <button className={`ad-btn${picking ? '' : ' ghost'}`} onClick={() => setPicking(p => !p)} aria-live="polite">{picking ? 'press a key… (esc cancels)' : `key: ${captureKeyLabel(sd.captureKey)} · change`}</button>
+                {sd.captureKey !== ' ' && !picking && <button className="ad-btn ghost sm" onClick={() => setSd({ ...sd, captureKey: ' ' })}>reset to space</button>}
+              </div>
+            </SField>
+          </div>
+          <div className="ad-row" style={{ marginTop: 18 }}>
+            <button className="ad-btn" onClick={saveStaff} disabled={!staffDirty || !staffV.ok}>save operating mode</button>
+            <button className="ad-btn ghost" onClick={() => setSd(staffToDraft(st.data!))} disabled={!staffDirty}>revert</button>
+          </div>
+        </div>
         <div className="ad-card">
           <h3>admin pin</h3>
           <div className="ad-grid" style={{ gap: 10 }}>
