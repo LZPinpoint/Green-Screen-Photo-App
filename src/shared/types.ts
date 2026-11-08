@@ -53,6 +53,9 @@ export interface Session {
   emailed?: string
   /** staff hardware tests; excluded from stats */
   test?: boolean
+  /** staff mode: running capture number for the day, e.g. 12 -> 'A012' */
+  ticket?: number
+  label?: string  // optional staff note, e.g. 'smith family' or group name
 }
 
 export interface VenueSettings {
@@ -69,6 +72,17 @@ export interface VenueSettings {
   brand: { accent: string; logoFile?: string }  // venue can co-brand; default imagine red
   /** Digital delivery (QR + gallery + email). Absent or enabled=false => booth works fully offline, no uploads. */
   share?: ShareSettings
+  /** 'staff' = an attendant runs the booth from an operator console (default). 'kiosk' = guests self-serve. */
+  mode?: 'staff' | 'kiosk'
+  staff?: StaffSettings
+}
+export interface StaffSettings {
+  autoPrint: boolean          // print immediately after capture on the default scene (fast line mode)
+  copies: number              // default copies per capture
+  defaultSceneId?: string     // scene applied to every new capture until changed
+  ticketPrefix: string        // e.g. 'A' -> A001, A002 (printed small on the sheet, written on the guest's ticket)
+  captureKey: string          // keyboard/remote-clicker key that fires the shutter (default ' ')
+  countdownSec: number        // 0 = instant (staff says 'ready'), else shows countdown on the guest-facing screen
 }
 export interface ShareSettings {
   enabled: boolean
@@ -80,7 +94,9 @@ export interface ShareSettings {
 export const DEFAULT_SETTINGS: VenueSettings = {
   venueName: 'your venue', welcomeText: 'step into the story', idleTimeoutSec: 60, countdownSec: 3,
   maxPrintsPerSession: 2, adminPin: '1234', defaultLayoutId: 'classic-4x6', key: DEFAULT_KEY,
-  brand: { accent: '#B80021' }
+  brand: { accent: '#B80021' },
+  mode: 'staff',
+  staff: { autoPrint: false, copies: 1, ticketPrefix: 'A', captureKey: ' ', countdownSec: 3 }
 }
 
 // ─── Driver interfaces (main process) ───

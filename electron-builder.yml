@@ -1,12 +1,17 @@
 appId: com.imagine.booth
 productName: imagine booth
 copyright: imagine
+npmRebuild: false   # sharp + onnxruntime-node ship prebuilt N-API binaries; no native compile needed
+icon: resources/icon.png
 directories:
   output: release
   buildResources: resources
 files:
   - out/**
   - package.json
+  # onnxruntime-node ships every OS + NVIDIA GPU libs (~430 MB). We run the tiny cutout model on CPU only.
+  - '!node_modules/onnxruntime-node/bin/napi-v6/*/*/*providers_cuda*'
+  - '!node_modules/onnxruntime-node/bin/napi-v6/*/*/*tensorrt*'
 extraResources:
   - from: resources/models
     to: models
@@ -17,26 +22,34 @@ asarUnpack:
   - node_modules/@img/**
   - node_modules/onnxruntime-node/**
 win:
+  files:
+    - '!node_modules/onnxruntime-node/bin/napi-v6/darwin/**'
+    - '!node_modules/onnxruntime-node/bin/napi-v6/linux/**'
+    - '!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**'
   target:
     - target: nsis
       arch: [x64]
-  # icon: resources/icon.ico   (add a real 256x256 .ico before shipping)
 nsis:
   oneClick: false
   perMachine: true
   allowToChangeInstallationDirectory: true
 mac:
+  files:
+    - '!node_modules/onnxruntime-node/bin/napi-v6/win32/**'
+    - '!node_modules/onnxruntime-node/bin/napi-v6/linux/**'
   target:
     - target: dmg
       arch: [x64, arm64]
   category: public.app-category.photography
   extendInfo:
     NSCameraUsageDescription: imagine booth uses the camera to take guest photos.
-  # icon: resources/icon.icns
 dmg:
   title: imagine booth
 linux:
+  files:
+    - '!node_modules/onnxruntime-node/bin/napi-v6/darwin/**'
+    - '!node_modules/onnxruntime-node/bin/napi-v6/win32/**'
+    - '!node_modules/onnxruntime-node/bin/napi-v6/linux/arm64/**'
   target:
     - AppImage
   category: Graphics
-  # icon: resources/icon.png

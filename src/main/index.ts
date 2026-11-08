@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, session, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, session, shell } from 'electron'
 import { join } from 'node:path'
 import { initLogger, log } from './logger'
 import { createServices } from './services'
@@ -35,6 +35,16 @@ async function start(): Promise<void> {
   app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow() })
 }
 
+/** true only for this app's own display route (dev server or packaged file), never an arbitrary page */
+export function isDisplayUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    if (u.hash !== '#/display') return false
+    if (process.env.ELECTRON_RENDERER_URL && url.startsWith(process.env.ELECTRON_RENDERER_URL)) return true
+    return u.protocol === 'file:' && u.pathname.endsWith('/renderer/index.html')
+  } catch { return false }
+}
+
 function createWindow(): void {
   win = new BrowserWindow({
     width: 1280, height: 800, show: false, backgroundColor: '#000000', title: 'imagine booth',
@@ -65,7 +75,23 @@ function createWindow(): void {
     wc.on('will-navigate', e => e.preventDefault())
     wc.on('context-menu', e => e.preventDefault())
   }
-  wc.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) void shell.openExternal(url); return { action: 'deny' } })
+  wc.setWindowOpenHandler(({ url }) => {
+    // Staff console -> guest-facing second screen: only our own '#/display' route, fullscreen on an external monitor if present.
+    if (isDisplayUrl(url)) {
+      const ext = screen.getAllDisplays().find(d => d.id !== screen.getDisplayMatching(win!.getBounds()).id)
+      const b = (ext ?? screen.getPrimaryDisplay()).bounds
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          x: b.x, y: b.y, width: ext ? b.width : 960, height: ext ? b.height : 540, fullscreen: !!ext,
+          autoHideMenuBar: true, backgroundColor: '#000000', title: 'imagine booth — guest display',
+          webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, devTools: isDev }
+        }
+      }
+    }
+    if (/^https:\/\//.test(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
   wc.on('render-process-gone', (_e, d) => { log.error('renderer gone', d); if (d.reason !== 'clean-exit') wc.reload() })
 
   if (isDev) void win.loadURL(process.env.ELECTRON_RENDERER_URL!)

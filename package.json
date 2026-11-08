@@ -4,6 +4,8 @@
   "description": "imagine booth \u2014 green screen photo experience for museums, exhibits and events",
   "main": "out/main/index.js",
   "private": true,
+  "author": "imagine <hello@theimagineteam.com>",
+  "homepage": "https://www.theimagineteam.com",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",

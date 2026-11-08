@@ -14,7 +14,8 @@ export function mergeSettings(base: StoredSettings, patch: Partial<StoredSetting
   return {
     ...base, ...p,
     key: { ...base.key, ...(p.key ?? {}) },
-    brand: { ...base.brand, ...(p.brand ?? {}) }
+    brand: { ...base.brand, ...(p.brand ?? {}) },
+    staff: { ...(base.staff as object), ...(p.staff ?? {}) } as StoredSettings['staff']
   }
 }
 
