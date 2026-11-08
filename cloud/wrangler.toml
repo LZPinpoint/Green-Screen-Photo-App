@@ -1,0 +1,29 @@
+name = "imagine-booth-cloud"
+main = "src/worker.ts"
+compatibility_date = "2025-01-01"
+
+# Optional: your own domain, e.g. photos.example.org
+# routes = [{ pattern = "photos.example.org", custom_domain = true }]
+
+[vars]
+# Public base URL used in QR codes, emails and og:image. No trailing slash.
+PUBLIC_BASE_URL = "https://imagine-booth-cloud.YOUR-SUBDOMAIN.workers.dev"
+EMAIL_FROM = "imagine <photos@example.org>"
+
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "imagine-booth-photos"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "imagine-booth"
+database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+
+# Daily retention purge (03:17 UTC)
+[triggers]
+crons = ["17 3 * * *"]
+
+# Secrets (set with `wrangler secret put NAME`, never commit):
+#   SIGNING_SECRET   random 32+ chars; signs delete / unsubscribe tokens
+#   ADMIN_KEY        global admin key (creates venues, exports)
+#   RESEND_API_KEY   optional; without it emails are only logged

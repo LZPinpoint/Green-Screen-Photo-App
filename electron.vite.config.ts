@@ -5,7 +5,7 @@ import { resolve } from 'path'
 const alias = { '@shared': resolve('src/shared'), '@core': resolve('src/core') }
 
 export default defineConfig({
-  main: { resolve: { alias }, build: { rollupOptions: { external: ['sharp'] } } },
+  main: { resolve: { alias }, build: { rollupOptions: { external: ['sharp', 'onnxruntime-node'] } } },
   preload: { resolve: { alias } },
   renderer: {
     root: 'src/renderer',

@@ -1,0 +1,5 @@
+export { ShareClient, ShareHttpError, sniffImageType } from './client'
+export type { ShareConfig, FetchLike } from './client'
+export { ShareQueue, nodeQueueFs } from './queue'
+export type { QueueFs, QueueStatus, ShareQueueOptions, ShareQueueEvents, UploadMeta, EmailRequest } from './queue'
+export { newShareId, SHARE_ID_RE } from './id'

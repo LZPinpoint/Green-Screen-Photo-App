@@ -1,0 +1,20 @@
+.g-page { min-height: 100vh; background: #fff; color: #181818; font-family: var(--im-font); display: flex; flex-direction: column; position: absolute; inset: 0; overflow-y: auto; }
+.g-page * { box-sizing: border-box; }
+.g-bar { background: #B80021; padding: 14px 20px; }
+.g-mark { color: #fff; font-weight: 700; font-size: 26px; letter-spacing: -.03em; position: relative; display: inline-block; }
+.g-mark i { position: absolute; left: 3.9ch; top: -2px; width: 6px; height: 6px; border-radius: 50%; background: #fff; }
+.g-main { width: 100%; max-width: 520px; margin: 0 auto; padding: 24px 16px 8px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
+.g-main h1 { margin: 0; font-size: 30px; letter-spacing: -.02em; color: #B80021; }
+.g-main h2 { margin: 10px 0 0; font-size: 20px; }
+.g-lead { margin: -6px 0 0; font-size: 18px; color: #555; }
+.g-photo { width: 100%; height: auto; border-radius: 22px; box-shadow: 0 12px 40px -12px rgba(0,0,0,.4); display: block; background: #eee; }
+.g-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 0 22px; border-radius: 999px; border: 2px solid #181818; background: #fff; color: #181818; font: 700 16px var(--im-font); text-decoration: none; cursor: pointer; }
+.g-btn.primary { background: #B80021; border-color: #B80021; color: #fff; }
+.g-btn.block { display: flex; width: 100%; font-size: 18px; min-height: 60px; }
+.g-share { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.g-demo { font-size: 14px; color: #555; background: #f4f4f4; border-radius: 14px; padding: 12px 14px; margin: 6px 0 0; line-height: 1.4; }
+.g-demo b { color: #B80021; }
+.g-missing { background: #f4f4f4; border-radius: 22px; padding: 28px 20px; text-align: center; line-height: 1.5; }
+.g-missing p { margin: 0 0 8px; }
+.g-foot { max-width: 520px; width: 100%; margin: 0 auto; padding: 16px 16px 32px; color: #666; font-size: 13px; line-height: 1.5; }
+.g-foot p { margin: 0 0 6px; } .g-foot a { color: #181818; }

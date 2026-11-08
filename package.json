@@ -1,7 +1,7 @@
 {
   "name": "imagine-booth",
   "version": "0.1.0",
-  "description": "imagine booth — green screen photo experience for museums, exhibits and events",
+  "description": "imagine booth \u2014 green screen photo experience for museums, exhibits and events",
   "main": "out/main/index.js",
   "private": true,
   "scripts": {
@@ -15,7 +15,8 @@
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "onnxruntime-node": "^1.20.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

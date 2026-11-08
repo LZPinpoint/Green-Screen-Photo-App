@@ -51,6 +51,8 @@ export interface Session {
   composite?: string
   printed: number
   emailed?: string
+  /** staff hardware tests; excluded from stats */
+  test?: boolean
 }
 
 export interface VenueSettings {
@@ -65,6 +67,15 @@ export interface VenueSettings {
   defaultLayoutId: string
   key: KeyParams
   brand: { accent: string; logoFile?: string }  // venue can co-brand; default imagine red
+  /** Digital delivery (QR + gallery + email). Absent or enabled=false => booth works fully offline, no uploads. */
+  share?: ShareSettings
+}
+export interface ShareSettings {
+  enabled: boolean
+  baseUrl: string      // e.g. https://photos.example.com  (the cloud/ worker)
+  venueId: string
+  apiKey: string       // booth key issued for the venue
+  retentionDays?: number
 }
 export const DEFAULT_SETTINGS: VenueSettings = {
   venueName: 'your venue', welcomeText: 'step into the story', idleTimeoutSec: 60, countdownSec: 3,
@@ -112,11 +123,22 @@ export interface BoothAPI {
     saveScene(s: BackgroundScene, imageDataUrl?: ImageData64): Promise<void>
     deleteScene(id: string): Promise<void>
     frames(): Promise<FrameOverlay[]>
+    saveFrame(f: FrameOverlay, imageDataUrl?: ImageData64): Promise<void>
     layouts(): Promise<PrintLayout[]>
+    saveLayout(l: PrintLayout): Promise<void>
     imageUrl(file: string): Promise<ImageData64>
   }
   settings: { get(): Promise<VenueSettings>; set(s: Partial<VenueSettings>): Promise<VenueSettings> }
   stats: { summary(): Promise<{ sessions: number; prints: number; byScene: Record<string, number>; byDay: Record<string, number> }> }
   ai: { cutout(dataUrl: ImageData64): Promise<ImageData64> } // returns PNG with alpha
+  share: {
+    /** Is digital delivery configured? */
+    enabled(): Promise<boolean>
+    /** Reserve the guest link for this session BEFORE the print sheet is built, so the QR can be printed. null => sharing off. */
+    reserve(sessionId: string): Promise<{ shareId: string; guestUrl: string } | null>
+    /** Queue the gallery link by email. consent must be true. Never blocks; delivery is retried in the background. */
+    email(shareId: string, email: string, consent: boolean, marketingOptIn: boolean): Promise<{ queued: boolean }>
+    status(): Promise<{ pending: number; failed: number; total: number }>
+  }
 }
 declare global { interface Window { booth: BoothAPI } }

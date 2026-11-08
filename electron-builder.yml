@@ -1,0 +1,42 @@
+appId: com.imagine.booth
+productName: imagine booth
+copyright: imagine
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**
+  - package.json
+extraResources:
+  - from: resources/models
+    to: models
+  - from: resources/logos
+    to: logos
+asarUnpack:
+  - node_modules/sharp/**
+  - node_modules/@img/**
+  - node_modules/onnxruntime-node/**
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # icon: resources/icon.ico   (add a real 256x256 .ico before shipping)
+nsis:
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  category: public.app-category.photography
+  extendInfo:
+    NSCameraUsageDescription: imagine booth uses the camera to take guest photos.
+  # icon: resources/icon.icns
+dmg:
+  title: imagine booth
+linux:
+  target:
+    - AppImage
+  category: Graphics
+  # icon: resources/icon.png
