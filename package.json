@@ -1,7 +1,7 @@
 {
   "name": "imagine-booth",
   "version": "0.1.0",
-  "description": "imagine booth \u2014 green screen photo experience for museums, exhibits and events",
+  "description": "imagine booth — green screen photo experience for museums, exhibits and events",
   "main": "out/main/index.js",
   "private": true,
   "author": "imagine <hello@theimagineteam.com>",
@@ -15,10 +15,10 @@
     "dist": "electron-vite build && electron-builder"
   },
   "dependencies": {
+    "onnxruntime-node": "^1.20.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "sharp": "^0.33.5",
-    "onnxruntime-node": "^1.20.1"
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -28,6 +28,7 @@
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
     "electron-vite": "^2.3.0",
+    "onnxruntime-web": "^1.20.1",
     "typescript": "^5.6.0",
     "vite": "^5.4.0",
     "vitest": "^2.1.0"

@@ -83,3 +83,35 @@ describe('performance', () => {
     expect(ms).toBeLessThan(400)
   })
 })
+
+describe('stage (garbage matte)', () => {
+  // a frame whose left third is NOT green (a wall the camera sees past the screen edge) and the rest is green
+  const W = 60, H = 40
+  const wall = (x: number) => x < 20
+  const img = () => {
+    const d = new Uint8ClampedArray(W * H * 4)
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const j = (y * W + x) * 4
+      if (wall(x)) { d[j] = 170; d[j + 1] = 165; d[j + 2] = 160 } else { d[j] = 0; d[j + 1] = 177; d[j + 2] = 64 }
+      d[j + 3] = 255
+    }
+    return { data: d, width: W, height: H }
+  }
+  const alphaAt = (o: { data: Uint8ClampedArray }, x: number, y: number) => o.data[(y * W + x) * 4 + 3]
+  it('without a stage the wall survives; with the stage it is removed', async () => {
+    const { chromaKey } = await import('../../src/core/keying/chromaKey')
+    const { DEFAULT_KEY } = await import('../../src/shared/types')
+    const base = chromaKey(img(), { ...DEFAULT_KEY, edgeShrink: 0 })
+    expect(alphaAt(base, 5, 20)).toBeGreaterThan(200) // wall kept (bug the testers saw)
+    const staged = chromaKey(img(), { ...DEFAULT_KEY, edgeShrink: 0, stage: { left: 0.4, right: 0, top: 0, bottom: 0 } })
+    expect(alphaAt(staged, 5, 20)).toBe(0)
+    expect(alphaAt(staged, 45, 20)).toBe(0) // green still keyed out
+  })
+  it('clamps absurd values and ignores NaN', async () => {
+    const { applyStage } = await import('../../src/core/keying/chromaKey')
+    const a = new Uint8Array(100 * 100).fill(255)
+    applyStage(a, 100, 100, { left: 5, right: Number.NaN, top: -1, bottom: 0 })
+    expect(a[50 * 100 + 44]).toBe(0)   // left clamped to 45%
+    expect(a[50 * 100 + 46]).toBe(255) // centre kept
+  })
+})

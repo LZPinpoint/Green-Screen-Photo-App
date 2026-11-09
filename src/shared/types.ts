@@ -10,6 +10,9 @@ export interface KeyParams {
   spill: number        // spill suppression strength (default 0.50)
   edgeShrink: number   // px erode of matte, 0..4 (default 1)
   mode: 'chroma' | 'ai' | 'auto'
+  /** 'Stage' / garbage matte: fraction (0..0.45) of each frame edge to discard outright. Use when the camera sees past the
+   *  edges of the green screen (walls, ceiling, equipment). Undefined = whole frame is used. */
+  stage?: { left: number; right: number; top: number; bottom: number }
 }
 export const DEFAULT_KEY: KeyParams = {
   keyColor: [0, 177, 64], similarity: 0.4, smoothness: 0.1, spill: 0.5, edgeShrink: 1, mode: 'auto'

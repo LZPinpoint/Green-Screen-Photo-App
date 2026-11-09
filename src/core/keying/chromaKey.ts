@@ -94,11 +94,27 @@ function cleanup(a: Uint8Array, w: number, h: number): void {
   }
 }
 
+/** Zero the matte outside the 'stage' rectangle (everything the camera sees beyond the green screen). */
+export function applyStage(a: Uint8Array, w: number, h: number, st: KeyParams['stage']): void {
+  if (!st) return
+  const c = (v: number) => Math.max(0, Math.min(0.45, Number.isFinite(v) ? v : 0))
+  const x0 = Math.round(c(st.left) * w), x1 = w - Math.round(c(st.right) * w)
+  const y0 = Math.round(c(st.top) * h), y1 = h - Math.round(c(st.bottom) * h)
+  if (x0 === 0 && y0 === 0 && x1 === w && y1 === h) return
+  for (let y = 0; y < h; y++) {
+    const row = y * w
+    if (y < y0 || y >= y1) { a.fill(0, row, row + w); continue }
+    if (x0 > 0) a.fill(0, row, row + x0)
+    if (x1 < w) a.fill(0, row + x1, row + w)
+  }
+}
+
 /** Key a green screen out of `img`. Returns a new RGBA image (straight alpha). */
 export function chromaKey(img: RGBAImage, p: KeyParams): RGBAImage {
   const { width: w, height: h } = img
   const n = w * h
   let a = rawMatte(img, p)
+  applyStage(a, w, h, p.stage)
   const shrink = Math.max(0, Math.min(4, p.edgeShrink))
   const rInt = Math.floor(shrink), frac = shrink - rInt
   if (shrink > 0) {

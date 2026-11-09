@@ -20,6 +20,7 @@ uniform vec2 u_keyCbCr;
 uniform vec2 u_t;       // t0, t1 (distance / 255 units)
 uniform float u_spill;  // 0..1 already scaled (min(1, spill*2))
 uniform float u_shrink; // extra t0 offset to approximate erosion
+uniform vec4 u_stage;   // left, right, top, bottom margins to discard (0..1 of frame)
 
 vec2 cbcr(vec3 c) {
   vec3 p = c * 255.0;
@@ -33,6 +34,8 @@ void main() {
   vec4 s = texture2D(u_tex, uv);
   float d = length(cbcr(s.rgb) - u_keyCbCr) / 255.0;
   float a = smoothstep(u_t.x + u_shrink, u_t.y + u_shrink, d);
+  // texture is uploaded Y-flipped: uv.y = 1 is the TOP of the picture
+  a *= step(u_stage.x, uv.x) * step(uv.x, 1.0 - u_stage.y) * step(uv.y, 1.0 - u_stage.z) * step(u_stage.w, uv.y);
   vec3 c = s.rgb;
   float lim = max(c.r, c.b);
   if (c.g > lim) c.g -= (c.g - lim) * u_spill;
@@ -132,6 +135,8 @@ export function createKeyPreview(
     gl.uniform2f(U('u_t'), t0, t1)
     gl.uniform1f(U('u_spill'), Math.min(1, Math.max(0, p.spill) * 2))
     gl.uniform1f(U('u_shrink'), Math.max(0, p.edgeShrink) * 0.01)
+    const st = p.stage
+    gl.uniform4f(U('u_stage'), st ? Math.min(0.45, Math.max(0, st.left)) : 0, st ? Math.min(0.45, Math.max(0, st.right)) : 0, st ? Math.min(0.45, Math.max(0, st.top)) : 0, st ? Math.min(0.45, Math.max(0, st.bottom)) : 0)
     gl.uniform1f(U('u_hasBg'), bgImg ? 1 : 0)
     gl.clearColor(0, 0, 0, 0)
     gl.clear(gl.COLOR_BUFFER_BIT)
