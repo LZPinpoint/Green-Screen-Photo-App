@@ -32,6 +32,12 @@ describe('settings import', () => {
     const r = validateSettingsImport({ adminPin: 'abc', brand: { accent: 'red' }, idleTimeoutSec: 'x' })
     expect(r.ok).toBe(false); expect(r.errors.length).toBe(3)
   })
+  it('accepts and clamps key.stage margins; an all-zero stage is dropped', () => {
+    const r = validateSettingsImport({ key: { mode: 'auto', stage: { left: 0.1, right: 9, top: -1, bottom: 0.2 } } })
+    expect(r.settings?.key?.stage).toEqual({ left: 0.1, right: 0.45, top: 0, bottom: 0.2 })
+    expect(validateSettingsImport({ key: { stage: { left: 0, right: 0, top: 0, bottom: 0 } } }).settings?.key?.stage).toBeUndefined()
+    expect(validateSettingsImport({ key: { stage: 5 } }).errors.length).toBeGreaterThan(0)
+  })
   it('clamps numbers and drops unknown keys', () => {
     const r = validateSettingsImport({ idleTimeoutSec: 99999, countdownSec: 0, evil: 1, key: { similarity: 5, edgeShrink: -1, mode: 'chroma' } })
     expect(r.ok).toBe(true)

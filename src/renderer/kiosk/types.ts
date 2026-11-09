@@ -11,4 +11,4 @@ export interface Cfg {
 export type { Reservation } from './ShareScreen'
 
 /** In-memory only. Wiped whenever the flow epoch changes. */
-export interface Shot { raw: ImageData64; keyed?: ImageData; failed?: boolean }
+export interface Shot { raw: ImageData64; keyed?: ImageData; failed?: boolean; engine?: 'chroma' | 'ai' | 'hybrid'; note?: string }

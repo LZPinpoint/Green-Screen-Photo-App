@@ -69,8 +69,14 @@ function ModeChooser({ onPick }: { onPick(w: Which): void }) {
 }
 
 function DemoSwitch({ which, onPick }: { which: Which; onPick(w: Which): void }) {
+  // kiosk: the badge is a real footer strip (the kiosk shrinks to make room), so it can never cover a button on a phone
+  useEffect(() => {
+    if (which !== 'kiosk') return
+    document.documentElement.classList.add('demo-foot')
+    return () => document.documentElement.classList.remove('demo-foot')
+  }, [which])
   return (
-    <div className={`demo-switch${which === 'staff' ? ' top' : ''}`} role="group" aria-label="demo mode" title="demo mode · nothing is uploaded or emailed">
+    <div className={`demo-switch${which === 'staff' ? ' top' : ' foot'}`} role="group" aria-label="demo mode" title="demo mode · nothing is uploaded or emailed">
       <span>{which === 'staff' ? 'demo' : 'demo · nothing is uploaded'}</span>
       <button aria-pressed={which === 'staff'} onClick={() => onPick('staff')}>staff</button>
       <button aria-pressed={which === 'kiosk'} onClick={() => onPick('kiosk')}>self-serve</button>

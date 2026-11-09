@@ -47,6 +47,16 @@ Runs on `onnxruntime-node` with a permissive model, lazy-loaded on first use. A 
 Order tried: `modnet.onnx`, `u2net.onnx`, `u2netp.onnx`. If no model loads or inference errors, a sharp-based border-colour chroma matte is used (still works on a clean green screen).
 **Never add `@imgly/background-removal-node` (AGPL-3.0).**
 
+### When the ai cutout is used (key mode `auto`, the default)
+1. The green key runs first, on the part of the picture that is really green screen (the *stage*, found automatically when `key.stage` is not set; set it by hand in *admin → green screen → stage*).
+2. **No green backdrop** in the picture (under ~15% of the stage border is green) or a **poor key** (almost nothing / almost everything removed, very ragged edges) -> the whole picture is cut out with the ai model instead.
+3. **Leftovers at the edges** that margin-trimming can't remove (a wall patch in one corner, a dark box): the ai matte is used as a garbage matte (`final alpha = green-key alpha x dilated ai alpha`), so the clean green-key edges around the guest are kept.
+4. A screen that fills the frame never runs the ai (fast path, no extra time). If the ai is missing, fails or takes more than 8 s the green-key result is used and the reason is shown (review screen / queue item).
+`chroma` = never ai, `ai` = always ai. The live preview shows a hint when the camera sees past the screen or sees no green at all.
+
+### Web demo
+The public web demo runs the same u2netp model in the browser with `onnxruntime-web` (MIT, wasm, single thread), self-hosted: `ort/ort-wasm-simd-threaded.{wasm,mjs}` and `models/u2netp.onnx` are copied into `dist-web/` by `src/renderer/vite.config.ts` (not into the Electron build). It loads lazily the first time a visitor has no green screen (about 16 MB once, then cached for offline use); a cutout takes about 2-4 s on a laptop.
+
 ## Dependency licenses (project rule: free + permissive)
 | Package | License |
 |---|---|

@@ -8,6 +8,7 @@ import { Spinner } from '../kiosk/Chrome'
 import type { Frame } from './pipeline'
 import type { Engine } from './engineClient'
 import { DISPLAY_FPS, type createDisplayPublisher } from './displayBus'
+import { useBackdropWatch } from '../keying/aiBridge'
 import { healthFromQuality, subjectRect, type Health } from './staffLogic'
 
 export const STAGE_W = 640
@@ -39,8 +40,12 @@ const LiveStage = forwardRef<StageHandle, Props>(function LiveStage(p, ref) {
     try { c.getContext('webgl', { preserveDrawingBuffer: true, premultipliedAlpha: true, alpha: true, antialias: false }) } catch { /* keyer falls back below */ }
     return c
   }, [])
-  const st = useRef({ bg: null as HTMLCanvasElement | null, frameImg: null as HTMLImageElement | null, scene: p.scene, key: p.keyParams, health: p.onHealth, keyer: false })
-  st.current.scene = p.scene; st.current.key = p.keyParams; st.current.health = p.onHealth
+  const st = useRef({ bg: null as HTMLCanvasElement | null, frameImg: null as HTMLImageElement | null, scene: p.scene, key: p.keyParams, health: p.onHealth, keyer: false, hint: '', raw: false })
+  // no green backdrop / screen doesn't fill the picture: checked ~2x per second on a tiny frame (not per video frame)
+  const live = useBackdropWatch(videoRef, !!p.stream, p.keyParams)
+  st.current.scene = p.scene; st.current.key = live.stage ? { ...p.keyParams, stage: live.stage } : p.keyParams; st.current.health = p.onHealth
+  st.current.hint = live.hint; st.current.raw = live.noGreen
+  useEffect(() => { if (live.hint) p.onHealth({ level: 'warn', text: live.hint }) }, [live.hint])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useImperativeHandle(ref, () => ({
     videoSize: () => ({ w: videoRef.current?.videoWidth ?? 0, h: videoRef.current?.videoHeight ?? 0 }),
@@ -100,7 +105,11 @@ const LiveStage = forwardRef<StageHandle, Props>(function LiveStage(p, ref) {
       if (v && v.videoWidth && v.readyState >= 2) {
         const sc = s.scene
         const r = subjectRect(sc?.anchor ?? { x: 0.5, y: 1, scale: 0.78 }, v.videoWidth, v.videoHeight, STAGE_W, STAGE_H)
-        if (s.keyer && gl.width > 1) ctx.drawImage(gl, r.left, r.top, r.w, r.h)
+        if (s.raw) {
+          // no green screen: show the camera as it is (cover-fit, mirrored like the keyed view); an un-keyed rectangle pasted on the scene would look like a failure
+          const k = Math.max(STAGE_W / v.videoWidth, STAGE_H / v.videoHeight), vw = v.videoWidth * k, vh = v.videoHeight * k
+          ctx.drawImage(v, (STAGE_W - vw) / 2, (STAGE_H - vh) / 2, vw, vh)
+        } else if (s.keyer && gl.width > 1) ctx.drawImage(gl, r.left, r.top, r.w, r.h)
         else if (!s.keyer) ctx.drawImage(v, r.left, r.top, r.w, r.h)
       }
       if (s.frameImg) ctx.drawImage(s.frameImg, 0, 0, STAGE_W, STAGE_H)
@@ -126,7 +135,7 @@ const LiveStage = forwardRef<StageHandle, Props>(function LiveStage(p, ref) {
         const bmp = await createImageBitmap(v, { resizeWidth: 320, resizeQuality: 'low' })
         const eng = await p.getEngine()
         const q = await eng.call<{ coverage: number; edgeNoise: number; greenFrac: number }>('health', { bitmap: bmp, key: st.current.key }, [bmp])
-        if (!dead) st.current.health(healthFromQuality(q))
+        if (!dead && !st.current.hint && !st.current.raw) st.current.health(healthFromQuality(q))
       } catch { /* keep the previous reading */ } finally { busy = false }
     }, 2000)
     return () => { dead = true; window.clearInterval(t) }

@@ -217,7 +217,14 @@ export function createMockBooth(): BoothAPI {
       }
     },
     stats: { summary: async () => ({ ...stats }) },
-    ai: { cutout: async d => d },
+    // web demo: a real in-browser person cutout (onnxruntime-web + u2netp, lazy, self-hosted). Electron builds drop this branch entirely.
+    ai: {
+      cutout: async d => {
+        if (typeof __WEB_DEMO__ === 'undefined' || !__WEB_DEMO__) throw new Error('ai cutout is not available in this build')
+        return (await import('@webai/webCutout')).webCutout(d)
+      },
+      warm: () => { if (typeof __WEB_DEMO__ !== 'undefined' && __WEB_DEMO__) void import('@webai/webCutout').then(m => m.webWarm()).catch(() => {}) }
+    } as BoothAPI['ai'],
     share: {
       enabled: async () => true,
       async reserve(sessionId) {
@@ -236,5 +243,6 @@ export function createMockBooth(): BoothAPI {
 export function installMockBooth(): boolean {
   if (typeof window === 'undefined' || (window as { booth?: BoothAPI }).booth) return false
   window.booth = createMockBooth()
+  ;(window as unknown as { __BOOTH_MOCK__?: boolean }).__BOOTH_MOCK__ = true
   return true
 }

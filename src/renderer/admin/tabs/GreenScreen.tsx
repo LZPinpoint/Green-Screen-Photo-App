@@ -6,6 +6,8 @@ import { autoCalibrate, chromaKey, coreKeyQuality } from '../coreAdapter'
 import type { RGBAImage } from '../coreAdapter'
 import { fileToDataUrl, loadImg, makeCanvas, sampleCanvas, toRGBA } from '../imgutil'
 import type { KeyParams } from '../../../shared/types'
+import { autoStage, effectiveKey, type Stage } from '../../keying/autoKey'
+import StageOverlay from './StageOverlay'
 
 type Source = 'webcam' | 'dslr' | 'still'
 const PW = 480
@@ -51,7 +53,7 @@ export default function GreenScreen() {
     try {
       if (k.mode === 'ai' && aiImg.current) { g.clearRect(0, 0, f.width, f.height); g.drawImage(aiImg.current, 0, 0, f.width, f.height); alpha = g.getImageData(0, 0, f.width, f.height).data }
       else {
-        const out = chromaKey(f, k)
+        const out = chromaKey(f, effectiveKey(f, k))   // auto mode with no saved stage: find it from this frame, like the booth does
         g.putImageData(new ImageData(new Uint8ClampedArray(out.data), out.width, out.height), 0, 0); alpha = out.data
       }
     } catch (e) { g.clearRect(0, 0, kc.width, kc.height); if (withQuality) setReport({ score: 0, label: 'poor', tips: ['keying engine error: ' + String((e as Error).message)], coreTips: [] }); return }
@@ -106,6 +108,13 @@ export default function GreenScreen() {
   }
   const sample = () => { aiImg.current = null; setFrame(sampleCanvas(640, 360)); setFrozen(true); process(true) }
   const upd = (p: Partial<KeyParams>) => setKey(k => (k ? { ...k, ...p } : k))
+  const setStage = (st: Stage | undefined) => setKey(k => { if (!k) return k; const { stage: _drop, ...rest } = k; return st && (st.left || st.right || st.top || st.bottom) ? { ...rest, stage: st } : rest })
+  const detectStage = () => {
+    const f = frame.current; if (!f) return
+    const st = autoStage(f, key!)
+    if (st) { setStage(st); toast('stage found — the part of the picture outside the green screen will be discarded') }
+    else toast('the green screen already fills the picture (or no green screen was found), so nothing was trimmed')
+  }
 
   const onSample = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const f = frame.current; if (!f) return
@@ -153,6 +162,7 @@ export default function GreenScreen() {
           <div className="ad-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div className="ad-view" style={{ aspectRatio: '16/9' }}>
               <canvas ref={raw} onClick={onSample} style={{ cursor: 'crosshair' }} aria-label="raw camera frame — click the green screen to sample its color" />
+              {key.stage && <StageOverlay stage={key.stage} frame={frame.current ? { w: frame.current.width, h: frame.current.height } : null} onChange={setStage} />}
               <span className="ad-cap">raw · click green to sample</span>
               {!frame.current && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#a8a8a8' }}>{source === 'webcam' ? 'waiting for camera…' : 'capture or load an image'}</div>}
             </div>
@@ -180,12 +190,29 @@ export default function GreenScreen() {
           <div className="ad-row sp"><h3 style={{ margin: 0 }}>key settings</h3>{dirty && <Chip tone="warn">unsaved</Chip>}</div>
           <div style={{ margin: '12px 0' }}><Seg label="mode" value={key.mode} options={['chroma', 'ai', 'auto'] as const} onChange={m => upd({ mode: m })} /></div>
           <p className="ad-muted" style={{ fontSize: 13, margin: '0 0 8px' }}>
-            {key.mode === 'chroma' ? 'fast green removal. best with even lighting.' : key.mode === 'ai' ? 'ai cutout for each photo. slower, works without a green screen.' : 'chroma first, falls back to ai when the screen looks poor.'}
+            {key.mode === 'chroma' ? 'fast green removal. best with even lighting.' : key.mode === 'ai' ? 'ai cutout for each photo. slower, works without a green screen.' : 'green key first (the part of the picture that is green screen is found automatically). no green screen, a patchy one, or leftover wall/ceiling at the edges? ai cuts the person out instead, or just tidies the edges.'}
           </p>
           <Slider label="similarity" value={key.similarity} onChange={v => upd({ similarity: v })} />
           <Slider label="smoothness" value={key.smoothness} onChange={v => upd({ smoothness: v })} />
           <Slider label="spill" value={key.spill} onChange={v => upd({ spill: v })} />
           <Slider label="edge shrink" value={key.edgeShrink} min={0} max={4} step={0.25} onChange={v => upd({ edgeShrink: v })} fmt={v => v.toFixed(1) + 'px'} />
+          <div className="ad-stage" style={{ margin: '12px 0 4px' }}>
+            <div className="ad-row sp"><b style={{ fontSize: 14 }}>stage (trim past the screen)</b>
+              <span className="ad-row" style={{ gap: 6 }}>
+                <button className="ad-btn sm ghost" onClick={detectStage} disabled={!frame.current}>detect stage</button>
+                <button className="ad-btn sm ghost" onClick={() => setStage(undefined)} disabled={!key.stage}>clear</button>
+              </span>
+            </div>
+            <p className="ad-muted" style={{ fontSize: 13, margin: '6px 0' }}>{key.stage ? 'anything outside the box on the raw view is discarded. drag its edges, or type percentages.' : key.mode === 'auto' ? 'auto: found for each photo. press detect stage to fix it for this venue.' : 'none. use this when the camera sees wall or ceiling past the green screen.'}</p>
+            <div className="ad-row" style={{ gap: 8 }}>
+              {(['left', 'right', 'top', 'bottom'] as const).map(side => (
+                <label key={side} style={{ fontSize: 12, display: 'grid', gap: 2 }}>{side} %
+                  <input className="ad-input" type="number" min={0} max={45} step={1} style={{ width: 62 }} value={Math.round((key.stage?.[side] ?? 0) * 100)}
+                    onChange={e => setStage({ left: 0, right: 0, top: 0, bottom: 0, ...key.stage, [side]: Math.min(0.45, Math.max(0, (Number(e.target.value) || 0) / 100)) })} />
+                </label>
+              ))}
+            </div>
+          </div>
           {key.mode === 'ai' && <button className="ad-btn sm" style={{ marginTop: 8 }} onClick={runAi} disabled={aiBusy || !frame.current}>{aiBusy ? 'working…' : 'run ai cutout on this frame'}</button>}
           <div className="ad-row" style={{ marginTop: 16 }}>
             <button className="ad-btn" onClick={save} disabled={!dirty}>save</button>

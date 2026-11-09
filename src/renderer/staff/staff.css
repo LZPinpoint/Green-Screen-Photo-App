@@ -169,6 +169,10 @@
 .mode-card small { margin-top: auto; font-size: 14px; letter-spacing: .1em; opacity: .85; }
 .mode-pick .note { color: #b8b8b8; font-size: 14px; }
 .demo-switch { position: fixed; right: 12px; bottom: 8px; z-index: 9000; display: flex; align-items: center; gap: 6px; font: 600 12px var(--im-font); color: rgba(255,255,255,.75); background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.2); padding: 3px 4px 3px 12px; border-radius: 999px; }
+.demo-switch.foot { left: 0; right: 0; bottom: 0; height: 40px; justify-content: center; border-radius: 0; border-width: 1px 0 0; background: #101010; padding: 0 12px; padding-bottom: env(safe-area-inset-bottom, 0); box-sizing: content-box; }
+.demo-switch.foot span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.demo-switch.foot button { flex: none; }
+html.demo-foot .kiosk { bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
 .demo-switch.top { top: 12px; bottom: auto; left: 250px; right: auto; z-index: 9100; }
 .demo-switch button { font: 600 12px var(--im-font); color: #fff; background: rgba(255,255,255,.14); border: 0; border-radius: 999px; padding: 6px 12px; min-height: 28px; cursor: pointer; }
 .demo-switch button[aria-pressed="true"] { background: #fff; color: #181818; }

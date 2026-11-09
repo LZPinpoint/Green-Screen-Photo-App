@@ -5,6 +5,8 @@ import { qrMatrix } from '@core/index'
 import type { BackgroundScene, BoothAPI, FrameOverlay, PrintLayout, Session, VenueSettings, StaffSettings } from '../../shared/types'
 import { getEngine, type Engine } from './engineClient'
 import { NEEDRAW, type ComposeResult, type IngestResult, type RawResult, type Img } from './engine'
+import { chooseKeyer } from '../keying/autoKey'
+import { aiAvailable, aiTimeoutMs } from '../keying/aiBridge'
 import { formatTicket, isToday, localDay, nextTicketNumber, normalizeStaff, todaysSessions, type Busy } from './staffLogic'
 
 export const KEY_MAX_DIM = 1600
@@ -23,6 +25,11 @@ export interface Item {
   copies: number
   printed: number
   busy: Busy
+  /** text on the queue chip while processing, e.g. 'cutting you out…' */
+  status?: string
+  /** how the background was removed, and why (plain english) */
+  engine?: 'chroma' | 'ai' | 'hybrid'
+  keyNote?: string
   failed: { stage: 'process' | 'print'; msg: string } | null
   thumb?: string              // composite preview (small jpeg data url)
   compositePath?: string
@@ -195,13 +202,13 @@ export class Pipeline {
     try {
       const eng = await this.eng()
       const multi = cfg.layout.photosPerSheet > 1
-      const ingest = (n: number) => {
-        const f = frames[n]
-        return eng.call<IngestResult>('ingest', { cacheKey: ck(n), bitmap: f.bitmap, url: f.url, key: cfg.settings.key, maxDim: KEY_MAX_DIM, hold: true }, f.bitmap ? [f.bitmap] : [])
-      }
+      // frame n is keyed in the worker (green key, instant). If the picture has no green screen / a poor one, the ai cutout runs
+      // here on the main side (window.booth.ai) and its matte is handed back to the worker. The queue chip says so meanwhile.
+      const ingest = (n: number, silent = false) => this.keyOne(key, n, frames[n], eng, silent)
       // key frame 0 while the session is being created (worker handles requests in order)
-      const ing: Promise<IngestResult>[] = [ingest(0)]
-      if (multi) for (let n = 1; n < frames.length; n++) ing.push(ingest(n))
+      const ing: Promise<void>[] = [ingest(0)]
+      ing[0].catch(() => {})
+      if (multi) for (let n = 1; n < frames.length; n++) { ing.push(ingest(n)); ing[n].catch(() => {}) }
       const s = resume ? { id: resume.sessionId } : await booth().session.start()
       this.patch(key, { sessionId: s.id })
       const it0 = this.get(key)!
@@ -209,10 +216,12 @@ export class Pipeline {
       const extra = await this.shareExtra(s.id)
       let sent!: () => void
       const composeSent = new Promise<void>(r => { sent = r })
+      await Promise.all(multi ? ing : [ing[0]])   // keyed (and ai-cut if needed) before the sheet is built
+      this.patch(key, { status: undefined })
       const compose = this.composeFor({ ...it0, sessionId: s.id }, multi ? frames.map((_, n) => n) : [0], extra, sent)
       // remaining burst frames key behind the composite (the worker runs requests in order), so they never delay it
       await Promise.race([composeSent, compose.catch(() => undefined)])
-      if (!multi) for (let n = 1; n < frames.length; n++) ing.push(ingest(n))
+      if (!multi) for (let n = 1; n < frames.length; n++) ing.push(ingest(n, true))
       const raws = frames.map((_, n) => eng.call<RawResult>('encodeRaw', { cacheKey: ck(n) }))
       const res = await compose
       await Promise.all(ing)
@@ -240,6 +249,38 @@ export class Pipeline {
     }
   }
   private keepForRetry = new Map<string, Frame[]>()
+  private aiChain: Promise<unknown> = Promise.resolve()
+
+  /** chroma-key one frame in the worker, then (if the decision rule says so) run the ai cutout and merge it. Only chroma errors throw. */
+  private async keyOne(itemKey: string, n: number, f: Frame, eng: Engine, silent: boolean): Promise<void> {
+    const cfg = this.cfg!
+    const ck = `${itemKey}#${n}`
+    const r = await eng.call<IngestResult>('ingest', { cacheKey: ck, bitmap: f.bitmap, url: f.url, key: cfg.settings.key, maxDim: KEY_MAX_DIM, hold: true }, f.bitmap ? [f.bitmap] : [])
+    const d = chooseKeyer(cfg.settings.key.mode, r.report ?? undefined)
+    if (n === 0 || !silent) this.patch(itemKey, { engine: 'chroma', keyNote: d.reason })
+    if (d.engine === 'chroma') return
+    if (!aiAvailable()) { this.patch(itemKey, { keyNote: `${d.reason}, but ai cutout is not available here` }); return }
+    if (!silent) this.patch(itemKey, { status: 'cutting you out…' })
+    // one ai cutout at a time: it is the heavy step, and the next guest's capture must not queue behind several at once
+    const run = this.aiChain.then(async () => {
+      const raw = await eng.call<{ url: string }>('rawForAi', { cacheKey: ck, maxDim: 1280 })
+      const png = await Promise.race([
+        booth().ai.cutout(raw.url),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('took too long')), aiTimeoutMs()))
+      ])
+      await eng.call('applyMatte', { cacheKey: ck, matteUrl: png, hybrid: d.engine === 'hybrid' })
+    })
+    this.aiChain = run.catch(() => undefined)
+    try {
+      const t = performance.now()
+      await run
+      this.patch(itemKey, { engine: d.engine, keyNote: d.reason })
+      const w = window as unknown as { __staffAi?: { ms: number; engine: string }[] }
+      ;(w.__staffAi ??= []).push({ ms: performance.now() - t, engine: d.engine })
+    } catch (e) {
+      this.patch(itemKey, { engine: 'chroma', keyNote: `${d.reason}, but ai cutout failed (${e instanceof Error ? e.message : 'unknown'}), so the green screen key was used` })
+    }
+  }
 
   private record(r: PerfRecord) {
     const w = window as unknown as { __staffPerf?: PerfRecord[] }
@@ -280,13 +321,13 @@ export class Pipeline {
     try { const p = eng.call<ComposeResult>('compose', { ...base, shots: shots({}) }); onSent?.(); return await p }
     catch (e) {
       if (!(e instanceof Error) || !e.message.startsWith(NEEDRAW)) throw e
-      // the key cache no longer has these frames (reload / many captures): re-key from the saved raw files
-      const urls: Record<string, string> = {}
+      // the key cache no longer has these frames (reload / many captures): re-key (incl. ai if needed) from the saved raw files
       for (const n of order) {
-        const p = it.shots[n]?.path
-        if (p) urls[`${it.key}#${n}`] = await booth().library.imageUrl(p)
+        const path = it.shots[n]?.path
+        if (path) { await this.keyOne(it.key, n, { url: await booth().library.imageUrl(path) }, eng, false); await eng.call('release', { cacheKey: `${it.key}#${n}` }) }
       }
-      return eng.call<ComposeResult>('compose', { ...base, shots: shots(urls) })
+      this.patch(it.key, { status: undefined })
+      return eng.call<ComposeResult>('compose', { ...base, shots: shots({}) })
     } finally { onSent?.() }
   }
 

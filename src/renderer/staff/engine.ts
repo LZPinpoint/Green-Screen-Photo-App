@@ -3,6 +3,7 @@
 // main-thread fallback (engineClient.ts) if workers are unavailable. DOM-free: OffscreenCanvas + createImageBitmap only.
 import { chromaKey, composeScene, layoutSheet, keyQuality } from '@core/index'
 import type { BackgroundScene, KeyParams, PrintLayout } from '../../shared/types'
+import { analyzeBackdrop, combineGarbage, effectiveKey, type BackdropReport } from '../keying/autoKey'
 
 export interface Img { data: Uint8ClampedArray; width: number; height: number }
 export interface SceneRef { file: string; url: string; anchor: BackgroundScene['anchor'] }
@@ -13,7 +14,7 @@ export interface ComposeMsg {
   layout: PrintLayout; footerText?: string; qr?: boolean[][]; outW: number; outH: number
 }
 export interface ComposeResult { sheetUrl: string; thumbUrl: string; ms: { key: number; compose: number; layout: number; encode: number } }
-export interface IngestResult { width: number; height: number; keyMs: number; readMs: number }
+export interface IngestResult { width: number; height: number; keyMs: number; readMs: number; report?: BackdropReport }
 export interface RawResult { rawUrl: string; thumbUrl: string }
 export interface HealthResult { coverage: number; edgeNoise: number; greenFrac: number }
 
@@ -77,10 +78,39 @@ const ops: Record<string, Op> = {
     const t0 = performance.now()
     const px = pixelsOf(bmp, m.maxDim)
     const t1 = performance.now()
-    touch(keyed, m.cacheKey, chromaKey(px, m.key) as Img, KEYED_MAX)
+    // auto mode: find the stage (what the camera sees past the green screen) first; the key then runs on that
+    touch(keyed, m.cacheKey, chromaKey(px, effectiveKey(px, m.key)) as Img, KEYED_MAX)
     const r: IngestResult = { width: bmp.width, height: bmp.height, readMs: t1 - t0, keyMs: performance.now() - t1 }
+    // is ai needed? (cheap: analysed on a ~320px copy; only for auto mode, so the green-screen path pays almost nothing)
+    if (m.key.mode === 'auto') { try { r.report = analyzeBackdrop(px, m.key) } catch { /* decide on green */ } }
     if (m.hold) held.set(m.cacheKey, bmp); else bmp.close()
     return r
+  },
+
+  /** a held frame as a (smaller) jpeg for the ai cutout, which runs on the main thread / main process, not in this worker */
+  async rawForAi(m: { cacheKey: string; maxDim: number }): Promise<{ url: string }> {
+    const bmp = held.get(m.cacheKey); if (!bmp) throw new Error('frame is gone')
+    const k = Math.min(1, m.maxDim / Math.max(bmp.width, bmp.height))
+    const oc = new OffscreenCanvas(Math.round(bmp.width * k), Math.round(bmp.height * k))
+    oc.getContext('2d')!.drawImage(bmp, 0, 0, oc.width, oc.height)
+    return { url: await jpeg(oc, 0.9) }
+  },
+
+  /** take the person's alpha from an ai cutout PNG: replace the matte, or (hybrid) use it as a garbage matte over the green key */
+  async applyMatte(m: { cacheKey: string; matteUrl: string; hybrid: boolean }): Promise<true> {
+    const cur = keyed.get(m.cacheKey); if (!cur) throw new Error('frame is gone')
+    const bmp = await decodeUrl(m.matteUrl)
+    const oc = new OffscreenCanvas(cur.width, cur.height)
+    const ctx = oc.getContext('2d', { willReadFrequently: true })!
+    ctx.drawImage(bmp, 0, 0, cur.width, cur.height); bmp.close()
+    const ai = ctx.getImageData(0, 0, cur.width, cur.height)
+    if (m.hybrid) touch(keyed, m.cacheKey, combineGarbage(cur, ai), KEYED_MAX)
+    else {
+      const out = new Uint8ClampedArray(cur.data)
+      for (let i = 3; i < out.length; i += 4) out[i] = ai.data[i]
+      touch(keyed, m.cacheKey, { data: out, width: cur.width, height: cur.height }, KEYED_MAX)
+    }
+    return true
   },
 
   /** full-resolution JPEG of a held frame (for saving the raw shot); releases the bitmap */
@@ -100,7 +130,7 @@ const ops: Record<string, Op> = {
       if (keyed.has(s.cacheKey)) { touch(keyed, s.cacheKey, keyed.get(s.cacheKey)!, KEYED_MAX); continue }
       if (!s.url) throw new Error(NEEDRAW + s.cacheKey)
       const bmp = await decodeUrl(s.url)
-      touch(keyed, s.cacheKey, chromaKey(pixelsOf(bmp, m.keyMaxDim), m.key) as Img, KEYED_MAX); bmp.close()
+      const kp = pixelsOf(bmp, m.keyMaxDim); touch(keyed, s.cacheKey, chromaKey(kp, effectiveKey(kp, m.key)) as Img, KEYED_MAX); bmp.close()
     }
     const t1 = performance.now()
     const [bg, frame] = await Promise.all([scenePixels(m.scene.file, m.scene.url), m.frame ? scenePixels(m.frame.file, m.frame.url) : Promise.resolve(undefined)])
@@ -127,6 +157,8 @@ const ops: Record<string, Op> = {
     const bmp = await decodeUrl(m.url)
     try { return await thumbOf(bmp, m.max) } finally { bmp.close() }
   },
+
+  async release(m: { cacheKey: string }) { const b = held.get(m.cacheKey); if (b) { b.close(); held.delete(m.cacheKey) } return true },
 
   async forget(m: { prefix: string }) {
     for (const k of [...keyed.keys()]) if (k.startsWith(m.prefix)) keyed.delete(k)

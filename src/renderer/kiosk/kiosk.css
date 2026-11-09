@@ -67,6 +67,9 @@ h2 { font-size: calc(var(--u) * 4.4); font-weight: 700; letter-spacing: -.01em; 
 @keyframes flash { from { opacity: 1; } to { opacity: 0; } }
 .pose-badge { position: absolute; top: calc(var(--u) * 2); left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.65); padding: calc(var(--u) * 1) calc(var(--u) * 2.6); border-radius: 999px; font-size: calc(var(--u) * 2.2); font-weight: 700; z-index: 2; }
 .pose-bar, .review-bar { flex: none; display: flex; flex-direction: column; gap: calc(var(--u) * 2.2); align-items: center; }
+.pose-frame.raw .pose-canvas { display: none; }
+.pose-frame.raw .pose-video { position: static; width: 100%; height: 100%; opacity: 1; object-fit: cover; transform: scaleX(-1); pointer-events: none; }
+.pose-warn { margin: 0; max-width: 60ch; font-size: max(14px, calc(var(--u) * 2.1)); line-height: 1.35; color: #ffd37a; background: rgba(255, 190, 60, .12); border: 1px solid rgba(255, 190, 60, .35); border-radius: 14px; padding: 8px 14px; }
 .pose-hint { font-size: calc(var(--u) * 2.8); color: var(--im-fog); min-height: 1.3em; }
 
 /* review */

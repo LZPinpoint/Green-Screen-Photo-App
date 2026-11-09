@@ -57,13 +57,13 @@ export function filterItems<T extends Matchable>(items: T[], q: string, prefix =
 
 // ─── item status ───
 export type Busy = 'processing' | 'printing' | null
-export interface StatusInput { busy: Busy; failed?: { stage: 'process' | 'print' } | null; printed: number; sharing?: boolean }
+export interface StatusInput { busy: Busy; status?: string; failed?: { stage: 'process' | 'print' } | null; printed: number; sharing?: boolean }
 export type StatusKey = 'processing' | 'ready' | 'printing' | 'printed' | 'failed-process' | 'failed-print' | 'uploading'
 export function itemStatus(i: StatusInput): { key: StatusKey; label: string; tone: 'busy' | 'ok' | 'bad' | 'idle' } {
   if (i.failed) return i.failed.stage === 'print'
     ? { key: 'failed-print', label: 'print failed · retry', tone: 'bad' }
     : { key: 'failed-process', label: 'failed · retry', tone: 'bad' }
-  if (i.busy === 'processing') return { key: 'processing', label: 'processing', tone: 'busy' }
+  if (i.busy === 'processing') return { key: 'processing', label: i.status ?? 'processing', tone: 'busy' }
   if (i.busy === 'printing') return { key: 'printing', label: 'printing', tone: 'busy' }
   if (i.printed > 0) return { key: 'printed', label: i.printed > 1 ? `printed ×${i.printed}` : 'printed', tone: 'ok' }
   if (i.sharing) return { key: 'uploading', label: 'sharing', tone: 'busy' }

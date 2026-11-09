@@ -3,6 +3,7 @@ import { createKeyPreview } from '@core/index'
 import { assetPixels } from './assets'
 import { newCanvas, grabFrame, toImageData } from './imaging'
 import { Spinner } from './Chrome'
+import { isWebDemo, useBackdropWatch, warmUpAi } from '../keying/aiBridge'
 import type { Cfg } from './types'
 
 interface Props {
@@ -23,7 +24,12 @@ export default function PoseScreen({ cfg, stream, shotIndex, onCapture, onBack, 
   const [count, setCount] = useState(0)
   const [flash, setFlash] = useState(false)
   const [camErr, setCamErr] = useState('')
-  const keyRef = useRef(cfg.settings.key); keyRef.current = cfg.settings.key
+  const keyRef = useRef(cfg.settings.key)
+  const live = useBackdropWatch(videoRef, !!stream, cfg.settings.key)
+  // auto mode: the live preview also trims what the camera sees past the screen
+  keyRef.current = live.stage ? { ...cfg.settings.key, stage: live.stage } : cfg.settings.key
+  const raw = live.noGreen   // no green backdrop: show the camera as is (an un-keyed rectangle would look like a broken result)
+  useEffect(() => { if (raw) warmUpAi() }, [raw])
   const useVideo = (cfg.camera?.kind ?? 'webcam') === 'webcam'
 
   // live keyed preview over the webcam stream (plain video draw if the keyer is unavailable)
@@ -81,7 +87,7 @@ export default function PoseScreen({ cfg, stream, shotIndex, onCapture, onBack, 
 
   return (
     <main className="k-screen k-pose">
-      <div className="pose-frame im-card">
+      <div className={`pose-frame im-card${raw ? ' raw' : ''}`}>
         <video ref={videoRef} muted playsInline className="pose-video" />
         <canvas ref={canvasRef} className="pose-canvas" />
         {!stream && <Spinner label="warming up the camera" />}
@@ -92,8 +98,9 @@ export default function PoseScreen({ cfg, stream, shotIndex, onCapture, onBack, 
       </div>
       <div className="pose-bar">
         <p className="pose-hint">
-          {camErr || (phase === 'counting' ? 'hold that pose!' : phase === 'shooting' ? 'got it!' : 'step onto the green and strike your best pose')}
+          {camErr || (phase === 'counting' ? 'hold that pose!' : phase === 'shooting' ? 'got it!' : raw && isWebDemo() ? 'no green screen needed in the demo — just pose, we’ll cut you out' : 'step onto the green and strike your best pose')}
         </p>
+        {live.hint && phase === 'ready' && !camErr && <p className="pose-warn" role="status">{live.hint}</p>}
         <div className="row">
           <button className="im-btn ghost" onClick={onBack} disabled={phase !== 'ready'}>back</button>
           <button className="im-btn big" onClick={start} disabled={phase !== 'ready' || !stream}>

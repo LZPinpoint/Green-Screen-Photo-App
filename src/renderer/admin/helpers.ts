@@ -93,6 +93,16 @@ export function validateSettingsImport(raw: unknown): ImportResult {
         if (['chroma', 'ai', 'auto'].includes(k.mode)) key.mode = k.mode
         else errors.push('key.mode must be chroma, ai or auto')
       }
+      if (k.stage !== undefined && k.stage !== null) {
+        // 'stage' = margins of the frame to discard (the camera sees past the green screen): each side 0..0.45
+        const st = k.stage
+        if (typeof st !== 'object') errors.push('key.stage must be {left,right,top,bottom}')
+        else {
+          const side = (v: unknown) => (isNum(v) ? clamp(v, 0, 0.45) : 0)
+          const s = { left: side(st.left), right: side(st.right), top: side(st.top), bottom: side(st.bottom) }
+          if (s.left || s.right || s.top || s.bottom) key.stage = s
+        }
+      }
       out.key = key
     }
   }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
-import { chromaKey } from '@core/index'
+import { keyFrame } from '../keying/autoKey'
+import { kioskEngines } from '../keying/aiBridge'
 import { DEFAULT_SETTINGS } from '../../shared/types'
 import { flowReducer, initialFlow } from './flow'
 import { Header } from './Chrome'
@@ -97,8 +98,10 @@ export default function KioskApp() {
   const keyShot = useCallback(async (index: number, raw: string, ep: number) => {
     try {
       const px = await dataUrlToImageData(raw, 1600)
-      const keyed = toImageData(chromaKey(px as Pixels as never, cfg!.settings.key) as unknown as Pixels)
-      if (ep === epoch.current) setShots(s => s.map((x, i) => i === index ? { ...x, keyed } : x))
+      // never throws: ai problems fall back to the green key and say why in `reason`
+      const r = await keyFrame(px, cfg!.settings.key, kioskEngines())
+      const keyed = toImageData(r.image as unknown as Pixels)
+      if (ep === epoch.current) setShots(s => s.map((x, i) => i === index ? { ...x, keyed, engine: r.engineUsed, note: r.reason } : x))
     } catch {
       if (ep === epoch.current) setShots(s => s.map((x, i) => i === index ? { ...x, failed: true } : x))
     }

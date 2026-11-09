@@ -26,3 +26,12 @@
 - [ ] Works offline (wifi off)
 - [ ] Admin PIN blocks guests; settings persist across restart
 - [ ] Stats count matches actual prints
+
+### No green screen / ai cutout (key mode `auto`)
+- [ ] Stand in a normal room with NO green screen: live view shows the plain camera plus "no green screen detected — we'll cut you out with ai after the photo"; after the photo the review says "cutting you out…" then "cut out with ai", and the guest is cleanly separated (hair, glasses, shoulders)
+- [ ] Two people side by side (selfie distance) and a phone-portrait frame are both cut out without holes in dark clothes
+- [ ] Real green screen that fills the frame: no ai step, capture -> ready time unchanged (staff queue never shows "cutting you out…")
+- [ ] Camera sees past the screen (wall in a corner, ceiling band, dark box): live view says "your green screen doesn't fill the picture on the top/left…"; the finished picture has no rectangular leftovers (stage trim and/or ai garbage matte); admin *detect stage* + drag handles keep the margins after restart
+- [ ] Rename `resources/models/u2netp.onnx` temporarily: photos still finish (green key fallback) and the review/queue says the ai was unavailable
+- [ ] Web demo (phone, no green screen): first cutout shows "getting ready (first time only)…", later ones are faster, and the demo works offline after the first load
+- [ ] Demo badge never covers retake / buttons at 390x844 and 1080x1920 (kiosk) or 1024x768 / 1440x900 (staff)

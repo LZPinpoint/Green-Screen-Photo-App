@@ -13,3 +13,9 @@ frames are generated on canvas; settings live in `localStorage`; "printing" pops
 
 Deploy `dist-web/` to any static host (Vercel, Netlify, GitHub Pages). `getUserMedia` needs https (or localhost).
 Staff access: tap the top-left corner 5 times within 3s, PIN `1234` (demo default).
+
+## no green screen needed (ai cutout in the browser)
+Visitors usually have no green screen. In `auto` mode the demo detects that and cuts people out with `onnxruntime-web` + the bundled
+u2netp model (MIT / Apache-2.0, self-hosted under `ort/` and `models/` in `dist-web/`, no CDN, no upload). It loads lazily the
+first time it is needed (~16 MB, cached afterwards, works offline), runs in a Web Worker on one wasm thread (no special headers),
+and takes ~2-4 s per photo. The files are added only by `src/renderer/vite.config.ts`; the Electron renderer build never contains them.

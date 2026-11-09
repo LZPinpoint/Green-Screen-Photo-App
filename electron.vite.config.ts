@@ -9,7 +9,8 @@ export default defineConfig({
   preload: { resolve: { alias } },
   renderer: {
     root: 'src/renderer',
-    resolve: { alias },
+    resolve: { alias: { ...alias, '@webai': resolve('src/renderer/keying/stub') } },
+    define: { __WEB_DEMO__: 'false' },   // keeps the in-browser ai (onnxruntime-web, wasm, model) out of the installers
     plugins: [react()],
     build: { rollupOptions: { input: { index: resolve('src/renderer/index.html') } } }
   }

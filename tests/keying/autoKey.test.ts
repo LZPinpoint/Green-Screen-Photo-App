@@ -111,7 +111,7 @@ describe('keyFrame', () => {
   })
 })
 
-import { dropIslands, refineMatte } from '../../src/renderer/keying/matte'
+import { dropIslands, fillHoles, refineMatte } from '../../src/renderer/keying/matte'
 describe('matte refinement', () => {
   it('keeps the big person blob, drops a small speck, keeps a second big person', () => {
     const w = 40, h = 40, m = new Float32Array(w * h)
@@ -124,6 +124,93 @@ describe('matte refinement', () => {
     const raw = new Float32Array(100).map((_, i) => i / 99)
     const r = refineMatte(raw, 10, 10)
     expect(r[0]).toBe(0); expect(r[99]).toBe(1)
-    expect(r[50]).toBeGreaterThan(0.3); expect(r[50]).toBeLessThan(0.7)
+    expect(r[20]).toBeGreaterThan(0.3); expect(r[50]).toBe(1)
+  })
+  it('fills small enclosed holes but not gaps open to the edge', () => {
+    const w = 30, h = 30, m = new Float32Array(w * h).fill(1)
+    m[10 * w + 10] = 0; m[11 * w + 10] = 0   // enclosed pinhole
+    for (let y = 0; y < 10; y++) m[y * w + 0] = 0 // open to the edge
+    fillHoles(m, w, h)
+    expect(m[10 * w + 10]).toBe(1); expect(m[3 * w]).toBe(0)
+  })
+})
+
+import { autoStage, effectiveKey, leftoverShare, stageGapSides, liveHint } from '../../src/renderer/keying/autoKey'
+
+/** testers' phone frames: green screen only fills part of the picture; wall patch top-left, ceiling band on top, dark box bottom-right, skin subject in the middle */
+function testerFrame(opts: { wallPatch?: boolean; ceiling?: boolean; box?: boolean } = { wallPatch: true, ceiling: true, box: true }): Px {
+  const w = 180, h = 320
+  const data = new Uint8ClampedArray(w * h * 4)
+  const put = (x: number, y: number, c: number[]) => { const i = (y * w + x) * 4; data[i] = c[0]; data[i + 1] = c[1]; data[i + 2] = c[2]; data[i + 3] = 255 }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let c = [8 + (x % 5), 177 - (y % 4), 64]                                  // green screen (a little noise)
+    if (opts.ceiling && y < 28) c = [225, 222, 215]                           // ceiling / vent band, full width
+    if (opts.wallPatch && x < 40 && y >= 28 && y < 80) c = [190, 175, 150]    // wall patch in the top-left corner
+    if (opts.box && x >= 140 && y >= 250) c = [30, 28, 30]                    // dark box bottom-right
+    if (Math.hypot((x - 90) / 38, (y - 190) / 90) < 1) c = [205, 150, 125]    // skin-coloured subject
+    put(x, y, c)
+  }
+  return { data, width: w, height: h }
+}
+const alphaAt = (p: Px, x: number, y: number) => p.data[(y * p.width + x) * 4 + 3]
+const AUTO: KeyParams = { ...DEFAULT_KEY, mode: 'auto' }
+
+describe('autoStage', () => {
+  it('trims the ceiling band, the wall-side and the box side; leaves a fully green frame alone', () => {
+    expect(autoStage(greenFrame(), DEFAULT_KEY)).toBeUndefined()
+    const st = autoStage(testerFrame({ ceiling: true }), DEFAULT_KEY)!
+    expect(st.top).toBeGreaterThan(28 / 320); expect(st.left).toBe(0)
+    expect(stageGapSides(st)).toEqual(['top'])
+  })
+  it('does not eat the subject at the bottom edge or the frame when there is no screen at all', () => {
+    const f = frame([0, 177, 64], [205, 150, 125])
+    expect(autoStage(f, DEFAULT_KEY)?.bottom ?? 0).toBeLessThan(0.05)
+    expect(autoStage(wallFrame(), DEFAULT_KEY)).toBeUndefined()
+  })
+  it('only applies in auto mode and never overrides an explicit stage', () => {
+    const f = testerFrame({ ceiling: true })
+    expect(effectiveKey(f, { ...DEFAULT_KEY, mode: 'chroma' }).stage).toBeUndefined()
+    expect(effectiveKey(f, AUTO).stage).toBeDefined()
+    const mine = { left: 0.1, right: 0, top: 0, bottom: 0 }
+    expect(effectiveKey(f, { ...AUTO, stage: mine }).stage).toBe(mine)
+    expect(liveHint('auto', { greenBorderFrac: 0.9, gaps: ['top', 'left'] })).toMatch(/top and left/)
+  })
+})
+
+describe('tester frames end to end (auto mode)', () => {
+  const check = (r: { image: Px }) => {
+    expect(alphaAt(r.image, 10, 5)).toBe(0)        // ceiling band
+    expect(alphaAt(r.image, 100, 10)).toBe(0)
+    expect(alphaAt(r.image, 15, 50)).toBe(0)       // wall patch top-left
+    expect(alphaAt(r.image, 165, 285)).toBe(0)     // dark box bottom-right
+    expect(alphaAt(r.image, 90, 190)).toBe(255)    // subject
+    expect(alphaAt(r.image, 90, 150)).toBe(255)
+  }
+  it('chroma + autoStage alone clears a full-width ceiling band', async () => {
+    const r = await keyFrame(testerFrame({ ceiling: true }), AUTO, {})
+    expect(r.engineUsed).toBe('chroma')
+    expect(alphaAt(r.image, 100, 10)).toBe(0); expect(alphaAt(r.image, 90, 190)).toBe(255)
+  })
+  it('all three leftovers + hybrid ai garbage matte -> clean', async () => {
+    const f = testerFrame()
+    // the ai sees only the person (slightly fattened)
+    const ai = (img: Px) => { const o = new Uint8ClampedArray(img.data); for (let y = 0; y < img.height; y++) for (let x = 0; x < img.width; x++) o[(y * img.width + x) * 4 + 3] = Math.hypot((x - 90) / 40, (y - 190) / 95) < 1 ? 255 : 0; return Promise.resolve({ data: o, width: img.width, height: img.height }) }
+    const r = await keyFrame(f, AUTO, { ai })
+    expect(r.engineUsed).toBe('hybrid'); check(r)
+  })
+  it('wall patch alone (autoStage cannot trim a corner) triggers the hybrid and is removed; without ai it is reported', async () => {
+    const f = testerFrame({ wallPatch: true })
+    const keyed = (await keyFrame(f, AUTO, {})).image
+    expect(leftoverShare(keyed.data, keyed.width, keyed.height)).toBeGreaterThan(0.015)
+    const ai = (img: Px) => { const o = new Uint8ClampedArray(img.data); for (let y = 0; y < img.height; y++) for (let x = 0; x < img.width; x++) o[(y * img.width + x) * 4 + 3] = Math.hypot((x - 90) / 40, (y - 190) / 95) < 1 ? 255 : 0; return Promise.resolve({ data: o, width: img.width, height: img.height }) }
+    const r = await keyFrame(f, AUTO, { ai })
+    expect(r.engineUsed).toBe('hybrid'); expect(alphaAt(r.image, 15, 50)).toBe(0); expect(alphaAt(r.image, 90, 190)).toBe(255)
+    const nok = await keyFrame(f, AUTO, { ai: () => Promise.reject(new Error('nope')) })
+    expect(nok.engineUsed).toBe('chroma'); expect(nok.reason).toMatch(/nope/)
+  })
+  it('fast path: a screen that fills the frame never runs ai', async () => {
+    let n = 0
+    const r = await keyFrame(greenFrame(), AUTO, { ai: img => { n++; return Promise.resolve(img) } })
+    expect(r.engineUsed).toBe('chroma'); expect(n).toBe(0)
   })
 })

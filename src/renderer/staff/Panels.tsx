@@ -5,7 +5,7 @@ import { assetUrl } from '../kiosk/assets'
 import { clockLabel, itemStatus, keyLabel } from './staffLogic'
 import type { Item } from './pipeline'
 
-export function Chip({ item }: { item: Pick<Item, 'busy' | 'failed' | 'printed' | 'sharing'> }) {
+export function Chip({ item }: { item: Pick<Item, 'busy' | 'status' | 'failed' | 'printed' | 'sharing'> }) {
   const s = itemStatus(item)
   return <span className={`st-chip tone-${s.tone}`} data-status={s.key}>{s.tone === 'busy' && <i className="st-spin" aria-hidden="true" />}{s.label}</span>
 }

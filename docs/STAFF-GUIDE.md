@@ -42,14 +42,15 @@ Tap a capture in the list (or press **[** and **]** to move through it).
 | Esc | close details / cancel countdown |
 | ? | help |
 
-## 6. troubleshooting — top 8
+## 6. troubleshooting — top 9
 1. **"Green is showing on the group" or edges look fuzzy** — move the group 2 steps further from the screen and light the screen evenly. Take shadows off the screen. Ask guests not to wear green.
-2. **"Can't see the green screen"** — the camera is pointing the wrong way, the lights are off, or the lens cap is on.
-3. **"Almost everything is turning green-screen"** — someone is wearing green, or the camera has switched to auto white-balance. Re-check the lighting; an admin can re-sample the green in *admin → green screen*.
-4. **Capture button is grey / "warming up the camera"** — the camera isn't connected. Check the USB cable, close other apps using the camera, then reload the page. A DSLR may need switching off and on.
-5. **A capture says "failed · retry"** — tap it and press **retry**. If it fails twice, press **retake** and shoot again.
-6. **Print failed** — check paper and ribbon and that the printer is on, then press **retry** on that capture. Prints never get lost; **reprint** works any time today.
-7. **Space bar does nothing** — click on an empty part of the screen first (you may be typing in the search box), or ask an admin whether the capture key was changed in *admin → settings → operating mode*.
-8. **Picture looks washed out or wrong colour** — the screen isn't evenly lit, or the wrong scene is selected. Check the scene strip, then call an admin.
+2. **"Your green screen doesn't fill the picture…" / "no green screen detected"** — move the camera closer or zoom in so the screen fills the picture (or ask an admin to set the *stage* in *admin → green screen*). Photos still work: the ai cuts the guest out and the queue shows "cutting you out…" for a few seconds.
+3. **"Can't see the green screen"** — the camera is pointing the wrong way, the lights are off, or the lens cap is on.
+4. **"Almost everything is turning green-screen"** — someone is wearing green, or the camera has switched to auto white-balance. Re-check the lighting; an admin can re-sample the green in *admin → green screen*.
+5. **Capture button is grey / "warming up the camera"** — the camera isn't connected. Check the USB cable, close other apps using the camera, then reload the page. A DSLR may need switching off and on.
+6. **A capture says "failed · retry"** — tap it and press **retry**. If it fails twice, press **retake** and shoot again.
+7. **Print failed** — check paper and ribbon and that the printer is on, then press **retry** on that capture. Prints never get lost; **reprint** works any time today.
+8. **Space bar does nothing** — click on an empty part of the screen first (you may be typing in the search box), or ask an admin whether the capture key was changed in *admin → settings → operating mode*.
+9. **Picture looks washed out or wrong colour** — the screen isn't evenly lit, or the wrong scene is selected. Check the scene strip, then call an admin.
 
 *Admin:* tap **admin** at the top right and enter the PIN. Under *settings → operating mode* an admin sets staff or self-serve mode, auto-print, default copies, the ticket letter, the capture key and the countdown. **self-serve** in the top bar switches the screen to guest self-serve until an admin switches back.
