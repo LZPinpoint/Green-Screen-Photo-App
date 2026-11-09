@@ -36,7 +36,7 @@ jobs:
       matrix:
         include:
           - { name: windows-x64,  os: windows-latest, args: '--win --x64' }
-          - { name: mac-arm64,    os: macos-latest,   args: '--mac --arm64' }
+          - { name: mac-arm64,    os: macos-15,       args: '--mac --arm64' }
           - { name: mac-x64,      os: macos-15-intel, args: '--mac --x64', optional: true }
           - { name: linux-x64,    os: ubuntu-latest,  args: '--linux --x64' }
     runs-on: ${{ matrix.os }}
